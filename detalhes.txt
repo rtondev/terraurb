@@ -1,0 +1,73 @@
+Terraurb
+
+1. Visão Geral do Sistema
+O sistema é uma plataforma especializada para o gerenciamento de denúncias de terrenos baldios, permitindo que cidadãos reportem lotes abandonados ou mal conservados em sua cidade. A plataforma facilita o acompanhamento e resolução destes casos pela prefeitura e cidadãos.
+
+2. Papéis de Usuário
+- Administrador (admin): Acesso total ao sistema, pode gerenciar usuários e conteúdo
+- Funcionário da Prefeitura (city_hall): Pode gerenciar denúncias e alterar status
+- Usuário Regular (regular): Pode criar denúncias, comentários e reportar conteúdo inadequado
+
+3. Sistema de Autenticação (/api)
+- Registro (/register): Criação de nova conta de usuário
+- Login (/login): Autenticação com email e senha, retorna token JWT
+- Perfil (/me): Visualização dos dados do usuário logado
+
+4. Gerenciamento de Denúncias (/api/complaints)
+- Criar Denúncia: Usuários podem registrar terrenos baldios, incluindo descrição, localização e tags
+- Listar Denúncias: Visualização de todas as denúncias de terrenos com detalhes
+- Status das Denúncias:
+  * Em Análise: Denúncia inicial recebida
+  * Em Andamento: Prefeitura está verificando o terreno
+  * Resolvido: Situação do terreno regularizada
+  * Cancelado: Denúncia cancelada
+  * Em Verificação: Vistoria técnica em andamento
+  * Reaberto: Problema com o terreno persistiu
+
+5. Sistema de Comentários (/api/comments)
+- Adicionar Comentário: Usuários podem comentar sobre as condições do terreno
+- Listar Comentários: Visualização de atualizações e observações por denúncia
+
+6. Gerenciamento de Tags (/api/tags)
+- Criar Tags: Administradores podem criar categorias (ex: mato alto, lixo acumulado, risco sanitário)
+- Listar Tags: Visualização de todas as categorias de problemas
+- Deletar Tags: Administradores podem remover categorias
+
+7. Sistema de Denúncias de Conteúdo (/api/reports)
+- Reportar Conteúdo: Usuários podem denunciar informações incorretas
+- Revisar Denúncias: Administradores podem avaliar e tomar ações
+- Status de Denúncias:
+  * inappropriate: Conteúdo removido
+  * dismissed: Denúncia descartada
+
+8. Administração (/api/admin)
+- Gerenciamento de Usuários: Listar e remover usuários
+- Moderação de Conteúdo: Remover denúncias e comentários inadequados
+
+9. Banco de Dados
+Utiliza MySQL com Sequelize como ORM, com as seguintes tabelas:
+- Users: Informações dos usuários
+- Complaints: Registro de denúncias de terrenos
+- ComplaintLogs: Histórico de alterações de status
+- Comments: Comentários em denúncias
+- Tags: Categorias para tipos de problemas
+- Reports: Denúncias de conteúdo inadequado
+
+10. Segurança
+- Autenticação via JWT
+- Senhas criptografadas com bcrypt
+- Validação de permissões por middleware
+- Proteção contra acesso não autorizado
+
+11. Configuração Inicial
+- Criação automática de usuário administrador padrão
+- Sincronização automática do banco de dados
+- Variáveis de ambiente para configuração
+
+12. API RESTful
+- Utiliza Express.js como framework
+- Respostas em formato JSON
+- Códigos de status HTTP apropriados
+- Tratamento de erros padronizado
+
+O sistema foi projetado para ser uma ferramenta eficiente no combate ao abandono de terrenos urbanos, facilitando a comunicação entre cidadãos e poder público para a manutenção da limpeza e segurança da cidade.
