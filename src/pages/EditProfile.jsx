@@ -1,15 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, MapPin, Calendar, ArrowLeft, Save } from 'lucide-react';
+import { User, Upload } from 'lucide-react';
 import Layout from '../components/Layout';
+import TopBar from '../components/TopBar';
 import api from '../services/api';
 
 function EditProfile() {
   const navigate = useNavigate();
+  const [form, setForm] = useState({
+    nickname: '',
+    email: '',
+    fullName: '',
+    city: '',
+    state: '',
+    age: '',
+    phone: '',
+    bio: '',
+    avatarUrl: ''
+  });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [editForm, setEditForm] = useState({});
+  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isCheckingNickname, setIsCheckingNickname] = useState(false);
+  const [nicknameAvailable, setNicknameAvailable] = useState(true);
+  const [originalNickname, setOriginalNickname] = useState('');
 
   useEffect(() => {
     loadProfile();
@@ -18,151 +32,292 @@ function EditProfile() {
   const loadProfile = async () => {
     try {
       const response = await api.get('/api/auth/me');
-      setEditForm(response.data);
+      setForm({
+        nickname: response.data.nickname || '',
+        email: response.data.email || '',
+        fullName: response.data.fullName || '',
+        city: response.data.city || '',
+        state: response.data.state || '',
+        age: response.data.age || '',
+        phone: response.data.phone || '',
+        bio: response.data.bio || '',
+        avatarUrl: response.data.avatarUrl || ''
+      });
+      setOriginalNickname(response.data.nickname || '');
+      setLoading(false);
     } catch (error) {
       setError('Erro ao carregar perfil');
-    } finally {
       setLoading(false);
+    }
+  };
+
+  const checkNickname = async (nickname) => {
+    if (nickname === originalNickname) {
+      setNicknameAvailable(true);
+      return;
+    }
+
+    setIsCheckingNickname(true);
+    try {
+      const response = await api.get(`/api/auth/check-nickname/${nickname}`);
+      setNicknameAvailable(response.data.available);
+    } catch (error) {
+      console.error('Erro ao verificar nickname:', error);
+    } finally {
+      setIsCheckingNickname(false);
+    }
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const response = await api.post('/api/auth/upload-avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setForm(prev => ({ ...prev, avatarUrl: response.data.avatarUrl }));
+      setSuccess('Foto atualizada com sucesso!');
+    } catch (error) {
+      setError('Erro ao fazer upload da foto');
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+    
+    if (name === 'nickname') {
+      checkNickname(value);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setSuccess('');
+
     try {
-      await api.put('/api/auth/me', editForm);
+      await api.put('/api/auth/me', form);
       setSuccess('Perfil atualizado com sucesso!');
-      setTimeout(() => navigate('/perfil'), 1500);
+      setTimeout(() => navigate('/configuracoes'), 2000);
     } catch (error) {
-      setError(error.response?.data?.message || 'Erro ao atualizar perfil');
+      setError(error.response?.data?.error || 'Erro ao atualizar perfil');
     }
   };
 
-  if (loading) return <div>Carregando...</div>;
+  // Estilo base para todos os inputs
+  const inputClassName = "block w-full rounded-md border border-gray-300 py-2 px-4 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none transition-colors sm:text-sm";
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-gray-500">Carregando...</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto min-h-screen border-x border-gray-200">
-        {/* Header */}
-        <div className="border-b border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => navigate('/configuracoes')}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h1 className="text-xl font-bold">Editar Perfil</h1>
-            </div>
-            <button
-              onClick={handleSubmit}
-              className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>Salvar</span>
-            </button>
-          </div>
-        </div>
+      <div className="flex flex-col min-h-screen bg-white">
+        <TopBar title="Editar Perfil" backTo="/configuracoes" />
 
-        {/* Mensagens */}
-        {error && (
-          <div className="p-4 bg-red-50 text-red-600 border-b border-red-100">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="p-4 bg-green-50 text-green-600 border-b border-green-100">
-            {success}
-          </div>
-        )}
+        <div className="flex-1 pt-14">
+          <form onSubmit={handleSubmit} className="mx-auto max-w-3xl space-y-12 px-4 py-6">
+            <div className="border-b border-gray-900/10 pb-12">
+              <h2 className="text-base font-semibold leading-7 text-gray-900">Perfil</h2>
+              <p className="mt-1 text-sm leading-6 text-gray-600">
+                Estas informações serão exibidas publicamente, então tenha cuidado com o que você compartilha.
+              </p>
 
-        {/* Banner e Avatar */}
-        <div className="relative">
-          <div className="h-48 bg-gradient-to-r from-blue-600 to-blue-400"></div>
-          <div className="absolute -bottom-16 left-4">
-            <div className="w-32 h-32 rounded-full border-4 border-white bg-white flex items-center justify-center">
-              <User className="w-16 h-16 text-gray-600" />
-            </div>
-          </div>
-        </div>
+              <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                <div className="sm:col-span-4">
+                  <label htmlFor="nickname" className="block text-sm font-medium text-gray-900">
+                    Nome de usuário
+                  </label>
+                  <div className="mt-2">
+                    <div className="flex rounded-md border border-gray-300 focus-within:border-blue-500 focus-within:outline-none transition-colors">
+                      <span className="flex select-none items-center pl-4 text-gray-500 sm:text-sm">
+                        terraurb.com/
+                      </span>
+                      <input
+                        type="text"
+                        name="nickname"
+                        id="nickname"
+                        value={form.nickname}
+                        onChange={handleChange}
+                        className="block flex-1 border-0 bg-transparent py-2 px-3 text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm"
+                      />
+                    </div>
+                    {isCheckingNickname && (
+                      <p className="mt-1 text-sm text-gray-500">Verificando disponibilidade...</p>
+                    )}
+                    {!isCheckingNickname && !nicknameAvailable && (
+                      <p className="mt-1 text-sm text-red-500">Este nome de usuário já está em uso</p>
+                    )}
+                  </div>
+                </div>
 
-        {/* Formulário */}
-        <div className="px-4 pt-20 pb-4">
-          <form className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nome de Usuário
-              </label>
-              <div className="flex items-center">
-                <span className="text-gray-500 mr-2">@</span>
-                <input
-                  type="text"
-                  value={editForm.nickname || ''}
-                  onChange={(e) => setEditForm({ ...editForm, nickname: e.target.value })}
-                  className="flex-1 px-3 py-2 border-b border-gray-300 focus:border-blue-500 outline-none transition-colors"
-                />
+                <div className="col-span-full">
+                  <label htmlFor="bio" className="block text-sm font-medium text-gray-900">
+                    Sobre
+                  </label>
+                  <div className="mt-2">
+                    <textarea
+                      id="bio"
+                      name="bio"
+                      rows={3}
+                      value={form.bio}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      placeholder="Escreva algumas frases sobre você"
+                    />
+                  </div>
+                </div>
+
+                <div className="col-span-full">
+                  <label htmlFor="photo" className="block text-sm font-medium text-gray-900">
+                    Foto de perfil
+                  </label>
+                  <div className="mt-2 flex items-center gap-x-3">
+                    {form.avatarUrl ? (
+                      <img src={form.avatarUrl} alt="Avatar" className="h-12 w-12 rounded-full object-cover" />
+                    ) : (
+                      <User className="h-12 w-12 text-gray-300" />
+                    )}
+                    <label className="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 cursor-pointer transition-colors">
+                      Alterar foto
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={editForm.email || ''}
-                disabled
-                className="w-full px-3 py-2 border-b border-gray-200 bg-gray-50 text-gray-500"
-              />
+            <div className="border-b border-gray-900/10 pb-12">
+              <h2 className="text-base font-semibold leading-7 text-gray-900">Informações Pessoais</h2>
+              <p className="mt-1 text-sm leading-6 text-gray-600">
+                Utilize um endereço onde você possa receber correspondências.
+              </p>
+
+              <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                <div className="sm:col-span-3">
+                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-900">
+                    Nome Completo
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      name="fullName"
+                      id="fullName"
+                      value={form.fullName}
+                      onChange={handleChange}
+                      className={inputClassName}
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-3">
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-900">
+                    Email
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="email"
+                      name="email"
+                      id="email"
+                      value={form.email}
+                      disabled
+                      className="block w-full rounded-md border border-gray-300 bg-gray-50 py-2 px-4 text-gray-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor="city" className="block text-sm font-medium text-gray-900">
+                    Cidade
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      name="city"
+                      id="city"
+                      value={form.city}
+                      onChange={handleChange}
+                      className={inputClassName}
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor="state" className="block text-sm font-medium text-gray-900">
+                    Estado
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      name="state"
+                      id="state"
+                      value={form.state}
+                      onChange={handleChange}
+                      className={inputClassName}
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-900">
+                    Telefone
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="tel"
+                      name="phone"
+                      id="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      className={inputClassName}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nome Completo
-              </label>
-              <input
-                type="text"
-                value={editForm.fullName || ''}
-                onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
-                className="w-full px-3 py-2 border-b border-gray-300 focus:border-blue-500 outline-none transition-colors"
-              />
-            </div>
+            {/* Mensagens de erro/sucesso */}
+            {error && (
+              <div className="text-red-600 text-sm">{error}</div>
+            )}
+            {success && (
+              <div className="text-green-600 text-sm">{success}</div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cidade
-              </label>
-              <input
-                type="text"
-                value={editForm.city || ''}
-                onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                className="w-full px-3 py-2 border-b border-gray-300 focus:border-blue-500 outline-none transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Idade
-              </label>
-              <input
-                type="number"
-                value={editForm.age || ''}
-                onChange={(e) => setEditForm({ ...editForm, age: e.target.value })}
-                className="w-full px-3 py-2 border-b border-gray-300 focus:border-blue-500 outline-none transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bio
-              </label>
-              <textarea
-                value={editForm.bio || ''}
-                onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 outline-none transition-colors resize-none"
-                placeholder="Conte um pouco sobre você..."
-              />
+            {/* Botões de ação */}
+            <div className="mt-6 flex items-center justify-end gap-x-6">
+              <button
+                type="button"
+                onClick={() => navigate('/configuracoes')}
+                className="text-sm font-semibold leading-6 text-gray-900"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                disabled={loading}
+              >
+                Salvar
+              </button>
             </div>
           </form>
         </div>
