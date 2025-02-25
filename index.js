@@ -28,7 +28,7 @@ app.use('/api/reports', reportRoutes);
 // Database sync and server start
 const PORT = process.env.PORT || 3000;
 
-sequelize.sync({ force: true }).then(async () => {
+sequelize.sync().then(async () => {
   console.log('Database synchronized');
   try {
     await createDefaultAdmin();
@@ -42,3 +42,5 @@ sequelize.sync({ force: true }).then(async () => {
 }).catch(err => {
   console.error('Error syncing database:', err);
 });
+
+

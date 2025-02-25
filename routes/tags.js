@@ -55,4 +55,28 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// Adicionar rota de edição de tag
+router.patch('/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const tag = await Tag.findByPk(req.params.id);
+
+    if (!tag) {
+      return res.status(404).json({ error: 'Tag não encontrada' });
+    }
+
+    if (!name) {
+      return res.status(400).json({ error: 'Nome da tag é obrigatório' });
+    }
+
+    await tag.update({ name });
+    res.json(tag);
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'Nome da tag já existe' });
+    }
+    res.status(500).json({ error: 'Erro ao atualizar tag' });
+  }
+});
+
 module.exports = router;

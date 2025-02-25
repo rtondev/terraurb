@@ -5,9 +5,25 @@ const router = express.Router();
 const swaggerDocument = {
   openapi: '3.0.0',
   info: {
-    title: 'Documentação Terraurb',
+    title: 'TerraurB API',
     version: '1.0.0',
-    description: 'Documentação da API da plataforma Terraurb, fornecendo endpoints para gerenciamento de denúncias, administração de usuários e moderação de conteúdo. A plataforma possui três tipos de usuários: administradores (admin), funcionários da prefeitura (city_hall) e usuários comuns (regular). Os administradores têm acesso total ao sistema, incluindo moderação de conteúdo e gerenciamento de usuários. Os funcionários da prefeitura podem gerenciar denúncias e atualizar seus status. Os usuários comuns podem criar denúncias, comentários e reportar conteúdo inadequado.'
+    description: `API para gerenciamento de denúncias de terrenos baldios. Sistema permite que cidadãos reportem terrenos abandonados ou mal conservados, com suporte para comentários, tags e moderação de conteúdo. Possui três níveis de acesso: administrador (admin), funcionário da prefeitura (city_hall) e usuário comum (regular).
+
+[Baixar especificação OpenAPI/Swagger JSON](/api/docs/json)
+
+Para uma melhor experiência, você pode:
+- Usar o endpoint acima para baixar o JSON completo da API
+- Importar o JSON em ferramentas como Postman ou Insomnia
+- Visualizar a documentação offline
+- Gerar código cliente automaticamente`,
+    contact: {
+      name: 'Suporte TerraurB',
+      email: 'suporte@terraurb.com'
+    },
+    license: {
+      name: 'MIT',
+      url: 'https://opensource.org/licenses/MIT'
+    }
   },
   components: {
     securitySchemes: {
@@ -23,7 +39,7 @@ const swaggerDocument = {
         properties: {
           id: { type: 'integer' },
           nickname: { type: 'string' },
-          email: { type: 'string', format: 'email' },
+          email: { type: 'string' },
           role: { type: 'string', enum: ['admin', 'city_hall', 'regular'] },
           createdAt: { type: 'string', format: 'date-time' }
         }
@@ -41,7 +57,10 @@ const swaggerDocument = {
           id: { type: 'integer' },
           description: { type: 'string' },
           location: { type: 'string' },
-          status: { type: 'string', enum: ['Em Análise', 'Em Andamento', 'Resolvido', 'Cancelado', 'Em Verificação', 'Reaberto'] },
+          status: {
+            type: 'string',
+            enum: ['Em Análise', 'Em Andamento', 'Resolvido', 'Cancelado', 'Em Verificação', 'Reaberto']
+          },
           userId: { type: 'integer' },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' }
@@ -66,19 +85,36 @@ const swaggerDocument = {
           status: { type: 'string', enum: ['pending', 'inappropriate', 'dismissed'] },
           targetId: { type: 'integer' },
           reporterId: { type: 'integer' },
-          reviewedBy: { type: 'integer', nullable: true },
-          reviewNote: { type: 'string', nullable: true },
+          reviewedBy: { type: 'integer' },
+          reviewNote: { type: 'string' },
           createdAt: { type: 'string', format: 'date-time' }
+        }
+      },
+      ComplaintLog: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          oldStatus: { type: 'string' },
+          newStatus: { type: 'string' },
+          changedById: { type: 'integer' },
+          ComplaintId: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' }
+        }
+      },
+      ComplaintTags: {
+        type: 'object',
+        properties: {
+          ComplaintId: { type: 'integer' },
+          TagId: { type: 'integer' }
         }
       }
     }
   },
   paths: {
-    '/api/auth/register': {
+    '/api/register': {
       post: {
-        tags: ['Auth'],
+        tags: ['Autenticação'],
         summary: 'Registrar novo usuário',
-        description: 'Cria uma nova conta de usuário no sistema. Por padrão, novos usuários são registrados com a função "regular". Apenas administradores podem alterar funções de usuário posteriormente.',
         requestBody: {
           required: true,
           content: {
@@ -89,31 +125,26 @@ const swaggerDocument = {
                 properties: {
                   nickname: { type: 'string' },
                   email: { type: 'string', format: 'email' },
-                  password: { type: 'string', format: 'password' }
+                  password: { type: 'string' }
                 }
               }
             }
           }
         },
         responses: {
-          '201': {
-            description: 'User registered successfully',
-            content: {
-              'application/json': {
-                schema: {
-                  $ref: '#/components/schemas/User'
-                }
-              }
-            }
+          201: {
+            description: 'Usuário registrado com sucesso'
+          },
+          400: {
+            description: 'Dados inválidos ou usuário já existe'
           }
         }
       }
     },
-    '/api/auth/login': {
+    '/api/login': {
       post: {
-        tags: ['Auth'],
+        tags: ['Autenticação'],
         summary: 'Login de usuário',
-        description: 'Autentica o usuário no sistema e retorna um token JWT que deve ser usado em todas as requisições subsequentes.',
         requestBody: {
           required: true,
           content: {
@@ -123,54 +154,77 @@ const swaggerDocument = {
                 required: ['email', 'password'],
                 properties: {
                   email: { type: 'string', format: 'email' },
-                  password: { type: 'string', format: 'password' }
+                  password: { type: 'string' }
                 }
               }
             }
           }
         },
         responses: {
-          '200': {
-            description: 'Login successful',
+          200: {
+            description: 'Login realizado com sucesso',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
                     token: { type: 'string' },
-                    user: { $ref: '#/components/schemas/User' }
+                    role: { type: 'string' }
                   }
                 }
               }
             }
+          },
+          401: {
+            description: 'Credenciais inválidas'
+          }
+        }
+      }
+    },
+    '/api/me': {
+      get: {
+        tags: ['Autenticação'],
+        summary: 'Obter dados do usuário atual',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Dados do usuário',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'integer' },
+                    nickname: { type: 'string' },
+                    email: { type: 'string' },
+                    role: { 
+                      type: 'string',
+                      enum: ['admin', 'city_hall', 'regular']
+                    }
+                  }
+                }
+              }
+            }
+          },
+          401: {
+            description: 'Token não fornecido'
+          },
+          403: {
+            description: 'Token inválido ou expirado'
+          },
+          404: {
+            description: 'Usuário não encontrado'
+          },
+          500: {
+            description: 'Erro ao buscar dados do usuário'
           }
         }
       }
     },
     '/api/complaints': {
-      get: {
-        tags: ['Complaints'],
-        summary: 'Listar todas as denúncias',
-        description: 'Retorna todas as denúncias cadastradas no sistema. Inclui informações sobre o autor, histórico de status e tags associadas.',
-        security: [{ bearerAuth: [] }],
-        responses: {
-          '200': {
-            description: 'List of complaints',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/Complaint' }
-                }
-              }
-            }
-          }
-        }
-      },
       post: {
-        tags: ['Complaints'],
+        tags: ['Denúncias'],
         summary: 'Criar nova denúncia',
-        description: 'Registra uma nova denúncia no sistema. O status inicial é sempre "Em Análise". É possível associar tags à denúncia para melhor categorização.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -182,29 +236,100 @@ const swaggerDocument = {
                 properties: {
                   description: { type: 'string' },
                   location: { type: 'string' },
-                  tagIds: { type: 'array', items: { type: 'integer' } }
+                  tagIds: { 
+                    type: 'array',
+                    items: { type: 'integer' }
+                  }
                 }
               }
             }
           }
         },
         responses: {
-          '201': {
-            description: 'Complaint created successfully',
+          201: {
+            description: 'Denúncia criada com sucesso',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Complaint' }
+                schema: {
+                  $ref: '#/components/schemas/Complaint'
+                }
               }
             }
+          },
+          400: {
+            description: 'Dados inválidos - Descrição e localização são obrigatórios ou tagIds deve ser um array'
+          },
+          500: {
+            description: 'Erro ao criar denúncia'
+          }
+        }
+      },
+      get: {
+        tags: ['Denúncias'],
+        summary: 'Listar todas as denúncias',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Lista de denúncias',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    allOf: [
+                      { $ref: '#/components/schemas/Complaint' },
+                      {
+                        type: 'object',
+                        properties: {
+                          author: {
+                            type: 'object',
+                            properties: {
+                              nickname: { type: 'string' }
+                            }
+                          },
+                          ComplaintLogs: {
+                            type: 'array',
+                            items: {
+                              allOf: [
+                                { $ref: '#/components/schemas/ComplaintLog' },
+                                {
+                                  type: 'object',
+                                  properties: {
+                                    changedBy: {
+                                      type: 'object',
+                                      properties: {
+                                        nickname: { type: 'string' }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          Tags: {
+                            type: 'array',
+                            items: {
+                              $ref: '#/components/schemas/Tag'
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          500: {
+            description: 'Erro ao buscar denúncias'
           }
         }
       }
     },
     '/api/complaints/{id}': {
       get: {
-        tags: ['Complaints'],
-        summary: 'Buscar denúncia por ID',
-        description: 'Retorna os detalhes completos de uma denúncia específica, incluindo seu histórico de alterações de status.',
+        tags: ['Denúncias'],
+        summary: 'Obter denúncia por ID',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -215,22 +340,67 @@ const swaggerDocument = {
           }
         ],
         responses: {
-          '200': {
-            description: 'Complaint details',
+          200: {
+            description: 'Detalhes da denúncia',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Complaint' }
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/Complaint' },
+                    {
+                      type: 'object',
+                      properties: {
+                        author: {
+                          type: 'object',
+                          properties: {
+                            nickname: { type: 'string' }
+                          }
+                        },
+                        ComplaintLogs: {
+                          type: 'array',
+                          items: {
+                            allOf: [
+                              { $ref: '#/components/schemas/ComplaintLog' },
+                              {
+                                type: 'object',
+                                properties: {
+                                  changedBy: {
+                                    type: 'object',
+                                    properties: {
+                                      nickname: { type: 'string' }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        Tags: {
+                          type: 'array',
+                          items: {
+                            $ref: '#/components/schemas/Tag'
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
               }
             }
+          },
+          404: {
+            description: 'Denúncia não encontrada'
+          },
+          500: {
+            description: 'Erro ao buscar denúncia'
           }
         }
       }
     },
     '/api/complaints/{id}/status': {
       patch: {
-        tags: ['Complaints'],
+        tags: ['Denúncias'],
         summary: 'Atualizar status da denúncia',
-        description: 'Permite que administradores e funcionários da prefeitura atualizem o status de uma denúncia. Cada alteração é registrada no histórico.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -258,49 +428,35 @@ const swaggerDocument = {
           }
         },
         responses: {
-          '200': {
-            description: 'Status updated successfully',
+          200: {
+            description: 'Status atualizado com sucesso',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Complaint' }
+                schema: {
+                  $ref: '#/components/schemas/Complaint'
+                }
               }
             }
+          },
+          400: {
+            description: 'Status inválido'
+          },
+          403: {
+            description: 'Sem permissão para atualizar status - Apenas administradores e funcionários da prefeitura'
+          },
+          404: {
+            description: 'Denúncia não encontrada'
+          },
+          500: {
+            description: 'Erro ao atualizar status da denúncia'
           }
         }
       }
     },
     '/api/comments/{complaintId}': {
-      get: {
-        tags: ['Comments'],
-        summary: 'Listar comentários de uma denúncia',
-        description: 'Retorna todos os comentários associados a uma denúncia específica, ordenados por data de criação.',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            in: 'path',
-            name: 'complaintId',
-            required: true,
-            schema: { type: 'integer' }
-          }
-        ],
-        responses: {
-          '200': {
-            description: 'List of comments',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/Comment' }
-                }
-              }
-            }
-          }
-        }
-      },
       post: {
-        tags: ['Comments'],
+        tags: ['Comentários'],
         summary: 'Adicionar comentário',
-        description: 'Permite que usuários adicionem comentários a uma denúncia. Os comentários ajudam no acompanhamento e discussão do caso.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -325,11 +481,41 @@ const swaggerDocument = {
           }
         },
         responses: {
-          '201': {
-            description: 'Comment created successfully',
+          201: {
+            description: 'Comentário adicionado com sucesso',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Comment' }
+                schema: {
+                  $ref: '#/components/schemas/Comment'
+                }
+              }
+            }
+          }
+        }
+      },
+      get: {
+        tags: ['Comentários'],
+        summary: 'Listar comentários de uma denúncia',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'complaintId',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Lista de comentários',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/Comment'
+                  }
+                }
               }
             }
           }
@@ -337,29 +523,9 @@ const swaggerDocument = {
       }
     },
     '/api/tags': {
-      get: {
-        tags: ['Tags'],
-        summary: 'Listar todas as tags',
-        description: 'Retorna todas as tags disponíveis para categorização de denúncias.',
-        security: [{ bearerAuth: [] }],
-        responses: {
-          '200': {
-            description: 'List of tags',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/Tag' }
-                }
-              }
-            }
-          }
-        }
-      },
       post: {
         tags: ['Tags'],
-        summary: 'Criar nova tag (Apenas Admin)',
-        description: 'Permite que administradores criem novas tags para categorização de denúncias.',
+        summary: 'Criar nova tag (Admin)',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -376,11 +542,36 @@ const swaggerDocument = {
           }
         },
         responses: {
-          '201': {
-            description: 'Tag created successfully',
+          201: {
+            description: 'Tag criada com sucesso',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Tag' }
+                schema: {
+                  $ref: '#/components/schemas/Tag'
+                }
+              }
+            }
+          },
+          403: {
+            description: 'Sem permissão de administrador'
+          }
+        }
+      },
+      get: {
+        tags: ['Tags'],
+        summary: 'Listar todas as tags',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Lista de tags',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/Tag'
+                  }
+                }
               }
             }
           }
@@ -390,8 +581,7 @@ const swaggerDocument = {
     '/api/tags/{id}': {
       delete: {
         tags: ['Tags'],
-        summary: 'Excluir tag (Apenas Admin)',
-        description: 'Permite que administradores removam tags do sistema.',
+        summary: 'Excluir tag (Admin)',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -402,17 +592,17 @@ const swaggerDocument = {
           }
         ],
         responses: {
-          '204': {
-            description: 'Tag deleted successfully'
+          204: {
+            description: 'Tag excluída com sucesso'
+          },
+          403: {
+            description: 'Sem permissão de administrador'
           }
         }
-      }
-    },
-    '/api/reports/users/{id}': {
-      delete: {
-        tags: ['Reports'],
-        summary: 'Excluir usuário (Apenas Admin)',
-        description: 'Permite que administradores excluam usuários do sistema. Não é possível excluir outros administradores.',
+      },
+      patch: {
+        tags: ['Tags'],
+        summary: 'Editar tag existente (Admin)',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -422,91 +612,50 @@ const swaggerDocument = {
             schema: { type: 'integer' }
           }
         ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
         responses: {
-          '204': {
-            description: 'User deleted successfully'
+          200: {
+            description: 'Tag atualizada com sucesso',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/Tag'
+                }
+              }
+            }
           },
-          '403': {
-            description: 'Não é possível excluir outro administrador'
+          400: {
+            description: 'Nome da tag é obrigatório ou já existe'
           },
-          '404': {
-            description: 'Usuário não encontrado'
-          }
-        }
-      }
-    },
-    '/api/reports/complaints/{id}': {
-      delete: {
-        tags: ['Reports'],
-        summary: 'Excluir denúncia (Apenas Admin)',
-        description: 'Permite que administradores excluam denúncias do sistema.',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            in: 'path',
-            name: 'id',
-            required: true,
-            schema: { type: 'integer' }
-          }
-        ],
-        responses: {
-          '204': {
-            description: 'Complaint deleted successfully'
+          403: {
+            description: 'Sem permissão de administrador'
           },
-          '404': {
-            description: 'Denúncia não encontrada'
-          }
-        }
-      }
-    },
-    '/api/reports/comments/{id}': {
-      delete: {
-        tags: ['Reports'],
-        summary: 'Excluir comentário (Apenas Admin)',
-        description: 'Permite que administradores excluam comentários do sistema.',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            in: 'path',
-            name: 'id',
-            required: true,
-            schema: { type: 'integer' }
-          }
-        ],
-        responses: {
-          '204': {
-            description: 'Comment deleted successfully'
+          404: {
+            description: 'Tag não encontrada'
           },
-          '404': {
-            description: 'Comentário não encontrado'
+          500: {
+            description: 'Erro ao atualizar tag'
           }
         }
       }
     },
     '/api/reports': {
-      get: {
-        tags: ['Reports'],
-        summary: 'Listar todas as denúncias de conteúdo (Apenas Admin)',
-        description: 'Retorna todas as denúncias de conteúdo inadequado para análise dos administradores.',
-        security: [{ bearerAuth: [] }],
-        responses: {
-          '200': {
-            description: 'List of reports',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/Report' }
-                }
-              }
-            }
-          }
-        }
-      },
       post: {
-        tags: ['Reports'],
+        tags: ['Denúncias de Conteúdo'],
         summary: 'Reportar conteúdo inadequado',
-        description: 'Permite que usuários reportem denúncias ou comentários inadequados para análise dos administradores.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -525,13 +674,283 @@ const swaggerDocument = {
           }
         },
         responses: {
-          '201': {
-            description: 'Report created successfully',
+          201: {
+            description: 'Denúncia registrada com sucesso',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Report' }
+                schema: {
+                  $ref: '#/components/schemas/Report'
+                }
               }
             }
+          }
+        }
+      },
+      get: {
+        tags: ['Denúncias de Conteúdo'],
+        summary: 'Listar denúncias de conteúdo (Admin)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Lista de denúncias',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/Report'
+                  }
+                }
+              }
+            }
+          },
+          403: {
+            description: 'Sem permissão de administrador'
+          }
+        }
+      }
+    },
+    '/api/reports/{id}/review': {
+      patch: {
+        tags: ['Denúncias de Conteúdo'],
+        summary: 'Revisar denúncia de conteúdo (Admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: { type: 'string', enum: ['inappropriate', 'dismissed'] },
+                  reviewNote: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Denúncia revisada com sucesso'
+          },
+          403: {
+            description: 'Sem permissão de administrador'
+          }
+        }
+      }
+    },
+    '/api/admin/users': {
+      get: {
+        tags: ['Administração'],
+        summary: 'Listar todos os usuários (Admin)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Lista de usuários',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/User'
+                  }
+                }
+              }
+            }
+          },
+          403: {
+            description: 'Sem permissão de administrador'
+          }
+        }
+      }
+    },
+    '/api/admin/users/{id}': {
+      delete: {
+        tags: ['Administração'],
+        summary: 'Excluir usuário (Admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        responses: {
+          204: {
+            description: 'Usuário excluído com sucesso'
+          },
+          403: {
+            description: 'Sem permissão ou tentativa de excluir outro admin'
+          },
+          404: {
+            description: 'Usuário não encontrado'
+          }
+        }
+      }
+    },
+    '/api/reports/users/{id}': {
+      delete: {
+        tags: ['Denúncias de Conteúdo'],
+        summary: 'Excluir usuário por denúncia (Admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        responses: {
+          204: {
+            description: 'Usuário excluído com sucesso'
+          },
+          403: {
+            description: 'Sem permissão ou tentativa de excluir outro admin'
+          },
+          404: {
+            description: 'Usuário não encontrado'
+          }
+        }
+      }
+    },
+    '/api/reports/complaints/{id}': {
+      delete: {
+        tags: ['Denúncias de Conteúdo'],
+        summary: 'Excluir denúncia por moderação (Admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        responses: {
+          204: {
+            description: 'Denúncia excluída com sucesso'
+          },
+          403: {
+            description: 'Sem permissão de administrador'
+          },
+          404: {
+            description: 'Denúncia não encontrada'
+          }
+        }
+      }
+    },
+    '/api/reports/comments/{id}': {
+      delete: {
+        tags: ['Denúncias de Conteúdo'],
+        summary: 'Excluir comentário por moderação (Admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        responses: {
+          204: {
+            description: 'Comentário excluído com sucesso'
+          },
+          403: {
+            description: 'Sem permissão de administrador'
+          },
+          404: {
+            description: 'Comentário não encontrado'
+          }
+        }
+      }
+    },
+    '/api/complaints/{id}/tags': {
+      post: {
+        tags: ['Denúncias'],
+        summary: 'Adicionar tags a uma denúncia',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['tagIds'],
+                properties: {
+                  tagIds: {
+                    type: 'array',
+                    items: { type: 'integer' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Tags adicionadas com sucesso'
+          },
+          404: {
+            description: 'Denúncia não encontrada'
+          }
+        }
+      },
+      delete: {
+        tags: ['Denúncias'],
+        summary: 'Remover tags de uma denúncia',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['tagIds'],
+                properties: {
+                  tagIds: {
+                    type: 'array',
+                    items: { type: 'integer' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Tags removidas com sucesso'
+          },
+          404: {
+            description: 'Denúncia não encontrada'
           }
         }
       }
@@ -539,7 +958,35 @@ const swaggerDocument = {
   }
 };
 
+// Rota para exibir o JSON completo da documentação
+router.get('/json', (req, res) => {
+  res.json(swaggerDocument);
+});
+
 router.use('/', swaggerUi.serve);
-router.get('/', swaggerUi.setup(swaggerDocument));
+router.get('/', swaggerUi.setup(swaggerDocument, {
+  swaggerOptions: {
+    docExpansion: 'none',
+    persistAuthorization: true,
+    displayRequestDuration: true,
+    defaultModelsExpandDepth: -1,
+    filter: true
+  },
+  customCss: `
+    .swagger-ui .topbar { display: none }
+    .swagger-ui .info__contact { padding: 1em 0 }
+    .swagger-ui .link { color: #4990e2 }
+    .swagger-ui .markdown p { margin: 1em 0 }
+  `,
+  customSiteTitle: "TerraurB API Documentation",
+  customfavIcon: "/favicon.ico",
+  customLinks: [
+    {
+      url: '/api/docs/json',
+      name: '⬇️ Download OpenAPI JSON',
+      target: '_blank'
+    }
+  ]
+}));
 
 module.exports = router;

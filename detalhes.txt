@@ -1,73 +1,125 @@
-Terraurb
+Terraurb - Sistema de Gerenciamento de Denúncias de Terrenos Baldios
 
 1. Visão Geral do Sistema
-O sistema é uma plataforma especializada para o gerenciamento de denúncias de terrenos baldios, permitindo que cidadãos reportem lotes abandonados ou mal conservados em sua cidade. A plataforma facilita o acompanhamento e resolução destes casos pela prefeitura e cidadãos.
+O Terraurb é uma plataforma especializada para o gerenciamento de denúncias de terrenos baldios, permitindo que cidadãos reportem lotes abandonados ou mal conservados em sua cidade. A plataforma facilita o acompanhamento e resolução destes casos pela prefeitura e cidadãos, com recursos de comentários, tags e moderação de conteúdo.
 
 2. Papéis de Usuário
-- Administrador (admin): Acesso total ao sistema, pode gerenciar usuários e conteúdo
-- Funcionário da Prefeitura (city_hall): Pode gerenciar denúncias e alterar status
-- Usuário Regular (regular): Pode criar denúncias, comentários e reportar conteúdo inadequado
+- Administrador (admin): Acesso total ao sistema, incluindo:
+  * Gerenciamento de usuários
+  * Moderação de conteúdo
+  * Gerenciamento de tags
+  * Revisão de denúncias de conteúdo
+  * Exclusão de conteúdo inadequado
+
+- Funcionário da Prefeitura (city_hall):
+  * Gerenciamento de denúncias
+  * Atualização de status
+  * Visualização de relatórios
+  * Interação com comentários
+
+- Usuário Regular (regular):
+  * Criação de denúncias
+  * Adição de comentários
+  * Uso de tags
+  * Reportar conteúdo inadequado
 
 3. Sistema de Autenticação (/api)
-- Registro (/register): Criação de nova conta de usuário
-- Login (/login): Autenticação com email e senha, retorna token JWT
-- Perfil (/me): Visualização dos dados do usuário logado
+- Registro (/register): Criação de nova conta
+- Login (/login): Autenticação com JWT
+- Perfil (/me): Dados do usuário logado
 
 4. Gerenciamento de Denúncias (/api/complaints)
-- Criar Denúncia: Usuários podem registrar terrenos baldios, incluindo descrição, localização e tags
-- Listar Denúncias: Visualização de todas as denúncias de terrenos com detalhes
+- Operações CRUD completas
 - Status das Denúncias:
-  * Em Análise: Denúncia inicial recebida
-  * Em Andamento: Prefeitura está verificando o terreno
-  * Resolvido: Situação do terreno regularizada
-  * Cancelado: Denúncia cancelada
-  * Em Verificação: Vistoria técnica em andamento
-  * Reaberto: Problema com o terreno persistiu
+  * Em Análise: Status inicial
+  * Em Andamento: Em verificação pela prefeitura
+  * Em Verificação: Vistoria técnica
+  * Resolvido: Caso solucionado
+  * Cancelado: Denúncia invalidada
+  * Reaberto: Problema persistente
 
 5. Sistema de Comentários (/api/comments)
-- Adicionar Comentário: Usuários podem comentar sobre as condições do terreno
-- Listar Comentários: Visualização de atualizações e observações por denúncia
+- Criação de comentários
+- Listagem por denúncia
+- Moderação de conteúdo
+- Exclusão por administradores
 
-6. Gerenciamento de Tags (/api/tags)
-- Criar Tags: Administradores podem criar categorias (ex: mato alto, lixo acumulado, risco sanitário)
-- Listar Tags: Visualização de todas as categorias de problemas
-- Deletar Tags: Administradores podem remover categorias
+6. Sistema de Tags (/api/tags)
+- Gerenciamento por administradores
+- Categorização de denúncias
+- Associação múltipla
+- Exemplos: mato alto, lixo acumulado, risco sanitário
+- Operações:
+  * Criar tag (POST /api/tags)
+  * Listar tags (GET /api/tags)
+  * Editar tag (PATCH /api/tags/{id})
+  * Excluir tag (DELETE /api/tags/{id})
 
 7. Sistema de Denúncias de Conteúdo (/api/reports)
-- Reportar Conteúdo: Usuários podem denunciar informações incorretas
-- Revisar Denúncias: Administradores podem avaliar e tomar ações
-- Status de Denúncias:
+- Tipos: denúncia ou comentário
+- Status:
+  * pending: Aguardando análise
   * inappropriate: Conteúdo removido
   * dismissed: Denúncia descartada
+- Revisão por administradores
+- Notas de moderação
 
 8. Administração (/api/admin)
-- Gerenciamento de Usuários: Listar e remover usuários
-- Moderação de Conteúdo: Remover denúncias e comentários inadequados
+- Gerenciamento de usuários
+- Listagem de usuários
+- Exclusão de contas
+- Moderação de conteúdo
 
-9. Banco de Dados
-Utiliza MySQL com Sequelize como ORM, com as seguintes tabelas:
-- Users: Informações dos usuários
-- Complaints: Registro de denúncias de terrenos
-- ComplaintLogs: Histórico de alterações de status
-- Comments: Comentários em denúncias
-- Tags: Categorias para tipos de problemas
-- Reports: Denúncias de conteúdo inadequado
+9. Banco de Dados (MySQL)
+Tabelas principais:
+- Users: Informações de usuários
+- Complaints: Registro de denúncias
+- ComplaintLogs: Histórico de status
+- Comments: Comentários
+- Tags: Categorias
+- ComplaintTags: Relacionamento N:N
+- Reports: Denúncias de conteúdo
 
 10. Segurança
-- Autenticação via JWT
-- Senhas criptografadas com bcrypt
-- Validação de permissões por middleware
-- Proteção contra acesso não autorizado
+- Autenticação JWT
+- Senhas com bcrypt
+- Middleware de autorização
+- Validação de roles
+- Proteção de rotas
 
-11. Configuração Inicial
-- Criação automática de usuário administrador padrão
-- Sincronização automática do banco de dados
-- Variáveis de ambiente para configuração
+11. Documentação
+- Swagger/OpenAPI
+- Rotas documentadas
+- Schemas definidos
+- Exemplos de uso
+- Autenticação descrita
 
-12. API RESTful
-- Utiliza Express.js como framework
-- Respostas em formato JSON
-- Códigos de status HTTP apropriados
-- Tratamento de erros padronizado
+12. Configuração Inicial
+- Variáveis de ambiente (.env)
+- Usuário admin padrão
+- Sincronização do banco
+- Migrations automáticas
 
-O sistema foi projetado para ser uma ferramenta eficiente no combate ao abandono de terrenos urbanos, facilitando a comunicação entre cidadãos e poder público para a manutenção da limpeza e segurança da cidade.
+13. API RESTful
+- Padrões REST
+- Respostas JSON
+- Status HTTP apropriados
+- Tratamento de erros
+- Validações de entrada
+
+14. Recursos Técnicos
+- Node.js + Express
+- Sequelize ORM
+- MySQL Database
+- JWT Authentication
+- CORS habilitado
+- Swagger Documentation
+
+15. Funcionalidades Adicionais
+- Upload de imagens (planejado)
+- Notificações (planejado)
+- Relatórios estatísticos (planejado)
+- Geolocalização (planejado)
+- App mobile (planejado)
+
+O sistema foi projetado para ser escalável, seguro e fácil de manter, com foco na usabilidade tanto para cidadãos quanto para funcionários públicos. A documentação completa da API está disponível através do Swagger UI em /api/docs.
