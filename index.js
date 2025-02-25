@@ -14,10 +14,16 @@ const statsRoutes = require('./routes/stats');
 
 const app = express();
 
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 // Configuração mais permissiva do CORS
 app.use(cors({
   origin: '*', // Permite todas as origens em desenvolvimento
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
   maxAge: 86400
@@ -35,6 +41,13 @@ app.use('/api/docs', docsRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/stats', statsRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(`Error: ${err.message}`);
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
 
 // Database sync and server start
 const PORT = process.env.PORT || 3000;
