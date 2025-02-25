@@ -16,13 +16,20 @@ function Login() {
     setError('');
     setLoading(true);
 
-    const result = await login(email, password);
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error);
+    try {
+      const result = await login(email, password);
+      if (result.success) {
+        navigate('/');
+      } else {
+        setError(result.error);
+        console.error('Erro de login:', result.error);
+      }
+    } catch (error) {
+      console.error('Erro ao fazer login:', error);
+      setError('Erro ao fazer login. Por favor, tente novamente.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

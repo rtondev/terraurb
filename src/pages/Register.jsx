@@ -7,7 +7,7 @@ import api from '../services/api';
 function Register() {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const [step, setStep] = useState(1); // 1: dados iniciais, 2: verificação
+  const [step, setStep] = useState(1); // 1: username, 2: email/password, 3: verification
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,14 +42,35 @@ function Register() {
     checkNicknameAvailability(value);
   };
 
-  const handleSendVerificationCode = async () => {
+  const handleNextStep = async () => {
     setError('');
     setLoading(true);
+
     try {
-      await api.post('/api/auth/send-verification-code', { email });
-      setStep(2);
+      if (step === 1 && nicknameAvailable) {
+        setStep(2);
+        setLoading(false);
+      } else if (step === 2) {
+        if (!email || !password) {
+          setError('Email e senha são obrigatórios');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          await api.post('/api/auth/send-verification-code', { email });
+          setStep(3);
+        } catch (error) {
+          if (error.response?.data?.error === 'Email já cadastrado') {
+            setError('Este email já está cadastrado');
+          } else {
+            setError('Erro ao enviar código. Por favor, tente novamente.');
+          }
+          console.error('Erro detalhado:', error.response?.data);
+        }
+      }
     } catch (error) {
-      setError(error.response?.data?.error || 'Erro ao enviar código');
+      setError(error.response?.data?.error || 'Erro ao prosseguir');
     } finally {
       setLoading(false);
     }
@@ -88,6 +109,45 @@ function Register() {
     }
   };
 
+  const handleResendCode = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      await api.post('/api/auth/send-verification-code', { email });
+      setError(''); // Limpar qualquer erro anterior
+      // Mostrar mensagem de sucesso temporária
+      const successMessage = document.createElement('div');
+      successMessage.className = 'text-green-500 text-sm mt-2';
+      successMessage.textContent = 'Código reenviado com sucesso!';
+      document.querySelector('form').appendChild(successMessage);
+      setTimeout(() => successMessage.remove(), 3000);
+    } catch (error) {
+      setError(error.response?.data?.error || 'Erro ao reenviar código');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderProgressBar = () => (
+    <div className="mb-8">
+      <div className="flex justify-between mb-2">
+        <span className="text-sm font-medium text-gray-600">
+          {step === 1 ? 'Nome de usuário' : step === 2 ? 'Credenciais' : 'Verificação'}
+        </span>
+        <span className="text-sm font-medium text-gray-600">
+          Passo {step} de 3
+        </span>
+      </div>
+      <div className="w-full h-2 bg-gray-200 rounded-full">
+        <div 
+          className="h-full bg-blue-500 rounded-full transition-all duration-300"
+          style={{ width: `${(step / 3) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex">
       {/* Lado Esquerdo - Banner */}
@@ -121,6 +181,8 @@ function Register() {
             Preencha seus dados para se cadastrar
           </p>
 
+          {renderProgressBar()}
+
           {error && (
             <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-4">
               {error}
@@ -130,7 +192,7 @@ function Register() {
           {step === 1 ? (
             <form onSubmit={(e) => {
               e.preventDefault();
-              handleSendVerificationCode();
+              handleNextStep();
             }} className="space-y-4">
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -160,6 +222,19 @@ function Register() {
                 </div>
               </div>
 
+              <button
+                type="submit"
+                disabled={loading || !nicknameAvailable || isCheckingNickname}
+                className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Verificando...' : 'Continuar'}
+              </button>
+            </form>
+          ) : step === 2 ? (
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleNextStep();
+            }} className="space-y-4">
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -186,13 +261,22 @@ function Register() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || !nicknameAvailable || isCheckingNickname}
-                className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Enviando...' : 'Continuar'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="w-1/2 border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !email || !password}
+                  className="w-1/2 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Enviando...' : 'Continuar'}
+                </button>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleVerifyAndRegister} className="space-y-4">
@@ -213,21 +297,30 @@ function Register() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || verificationCode.length !== 6}
-                className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Verificando...' : 'Criar conta'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="w-1/2 border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || verificationCode.length !== 6}
+                  className="w-1/2 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Verificando...' : 'Criar conta'}
+                </button>
+              </div>
 
               <button
                 type="button"
-                onClick={handleSendVerificationCode}
+                onClick={handleResendCode}
                 disabled={loading}
-                className="w-full text-blue-500 py-2 text-sm hover:underline"
+                className="w-full text-blue-500 py-2 text-sm hover:underline disabled:opacity-50"
               >
-                Reenviar código
+                {loading ? 'Reenviando...' : 'Reenviar código'}
               </button>
             </form>
           )}

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Mail, Shield, AlertTriangle, Clock, Trash2, ChevronRight } from 'lucide-react';
+import { User, Mail, Shield, AlertTriangle, Clock, Trash2, ChevronRight, Laptop } from 'lucide-react';
 import Layout from '../components/Layout';
 import api from '../services/api';
 
@@ -22,7 +22,7 @@ function Settings() {
 
   const loadProfile = async () => {
     try {
-      const response = await api.get('/api/me');
+      const response = await api.get('/api/auth/me');
       setProfile(response.data);
       setEditForm(response.data);
     } catch (error) {
@@ -56,6 +56,15 @@ function Settings() {
   };
 
   if (loading) return <div>Carregando...</div>;
+
+  const menuItems = [
+    {
+      icon: Laptop,
+      text: 'Dispositivos Conectados',
+      description: 'Gerencie os dispositivos que têm acesso à sua conta',
+      path: '/configuracoes/dispositivos'
+    }
+  ];
 
   return (
     <Layout>
@@ -98,6 +107,23 @@ function Settings() {
               <div>
                 <h3 className="font-medium text-gray-900">Logs de Atividade</h3>
                 <p className="text-sm text-gray-500">Visualize seu histórico de ações</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+          </Link>
+
+          {/* Dispositivos Conectados */}
+          <Link 
+            to="/configuracoes/dispositivos"
+            className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-50 rounded-full">
+                <Laptop className="w-5 h-5 text-green-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-900">Dispositivos Conectados</h3>
+                <p className="text-sm text-gray-500">Gerencie os dispositivos que têm acesso à sua conta</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400" />
