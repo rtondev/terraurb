@@ -46,3 +46,5 @@ sequelize.authenticate()
   });
 
 module.exports = { sequelize, User };
+
+

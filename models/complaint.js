@@ -10,6 +10,11 @@ const Complaint = sequelize.define('Complaint', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  // Adicionando o campo para as coordenadas do polígono
+  polygonCoordinates: {
+    type: DataTypes.JSON, // Usando JSON para armazenar o array de coordenadas
+    allowNull: true
+  },
   status: {
     type: DataTypes.ENUM(
       'Em Análise',

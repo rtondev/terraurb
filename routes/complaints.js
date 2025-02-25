@@ -12,10 +12,9 @@ const canChangeStatus = (req, res, next) => {
   next();
 };
 
-// Create a new complaint
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { description, location, tagIds } = req.body;
+    const { description, location, tagIds, polygonCoordinates } = req.body;
 
     if (!description || !location) {
       return res.status(400).json({ error: 'Descrição e localização são obrigatórios' });
@@ -28,6 +27,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const complaint = await Complaint.create({
       description,
       location,
+      polygonCoordinates, // Salvando as coordenadas do polígono
       userId: req.user.id
     });
 
@@ -44,6 +44,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     res.status(201).json(complaint);
   } catch (error) {
+    console.error('Erro ao criar denúncia:', error);
     res.status(500).json({ error: 'Erro ao criar denúncia' });
   }
 });
@@ -132,3 +133,6 @@ router.patch('/:id/status', authenticateToken, canChangeStatus, async (req, res)
 });
 
 module.exports = router;
+
+
+
