@@ -4,21 +4,15 @@
     {
       "src": "package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "config": {
+        "distDir": "build"
+      }
     }
   ],
   "routes": [
-    {
-      "src": "/assets/(.*)",
-      "dest": "/assets/$1"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "https://api.terraurb.com/api/$1"
-    },
     {
       "src": "/(.*)",
       "dest": "/index.html"
     }
   ]
-} 
+}
