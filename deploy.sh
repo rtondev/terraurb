@@ -59,4 +59,7 @@ echo "🔧 Configurando inicialização automática..."
 pm2 startup
 pm2 save
 
+# Reiniciar Nginx
+sudo systemctl restart nginx
+
 echo "✅ Deploy concluído!" 
