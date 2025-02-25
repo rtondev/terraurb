@@ -10,11 +10,13 @@ const docsRoutes = require('./routes/docs');
 const tagRoutes = require('./routes/tags');
 const reportRoutes = require('./routes/reports');
 const { createDefaultAdmin } = require('./utils/adminSetup');
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
 // Routes
 app.use('/api', authRoutes);
@@ -24,6 +26,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/docs', docsRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Database sync and server start
 const PORT = process.env.PORT || 3000;

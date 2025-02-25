@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.production
 
 # Logs
 logs
@@ -35,3 +36,6 @@ coverage
 *.swo
 .DS_Store
 Thumbs.db
+
+# PM2
+ecosystem.config.js
