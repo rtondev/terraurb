@@ -32,6 +32,10 @@ export function AuthProvider({ children }) {
       const response = await api.post('/api/auth/login', { email, password });
       const { token: newToken } = response.data;
       
+      if (!newToken) {
+        throw new Error('Token não recebido do servidor');
+      }
+
       localStorage.setItem('@TerraurB:token', newToken);
       setToken(newToken);
       
@@ -41,9 +45,10 @@ export function AuthProvider({ children }) {
       
       return { success: true };
     } catch (error) {
+      console.error('Erro no login:', error);
       return { 
         success: false, 
-        error: error.response?.data?.error || 'Erro ao fazer login' 
+        error: error.response?.data?.error || 'Erro ao fazer login'
       };
     }
   };

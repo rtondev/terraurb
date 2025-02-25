@@ -1,7 +1,12 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://terraurb.com'
+  // Use environment variable for API URL with fallback
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
 // Interceptor para adicionar o token em todas as requisições

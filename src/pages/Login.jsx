@@ -21,12 +21,14 @@ function Login() {
       if (result.success) {
         navigate('/');
       } else {
-        setError(result.error);
-        console.error('Erro de login:', result.error);
+        setError(result.error || 'Erro ao fazer login');
       }
     } catch (error) {
       console.error('Erro ao fazer login:', error);
-      setError('Erro ao fazer login. Por favor, tente novamente.');
+      setError(
+        error.response?.data?.error || 
+        'Erro ao conectar com o servidor. Verifique sua conexão.'
+      );
     } finally {
       setLoading(false);
     }
