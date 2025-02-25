@@ -7,15 +7,18 @@ const swaggerDocument = {
   info: {
     title: 'TerraurB API',
     version: '1.0.0',
-    description: `API para gerenciamento de denúncias de terrenos baldios. Sistema permite que cidadãos reportem terrenos abandonados ou mal conservados, com suporte para comentários, tags e moderação de conteúdo. Possui três níveis de acesso: administrador (admin), funcionário da prefeitura (city_hall) e usuário comum (regular).
+    description: `API completa para gerenciamento de denúncias de terrenos baldios. Sistema permite que cidadãos reportem terrenos abandonados ou mal conservados, com recursos avançados de comentários, tags, moderação de conteúdo e gerenciamento de sessões.
 
 [Baixar especificação OpenAPI/Swagger JSON](/api/docs/json)
 
-Para uma melhor experiência, você pode:
-- Usar o endpoint acima para baixar o JSON completo da API
-- Importar o JSON em ferramentas como Postman ou Insomnia
-- Visualizar a documentação offline
-- Gerar código cliente automaticamente`,
+Principais recursos:
+- Sistema completo de autenticação com JWT
+- Gerenciamento de sessões e dispositivos
+- Upload de imagens via Cloudinary
+- Sistema de tags e categorização
+- Moderação de conteúdo
+- Logs de atividades
+- Estatísticas em tempo real`,
     contact: {
       name: 'Suporte TerraurB',
       email: 'suporte@terraurb.com'
@@ -40,7 +43,36 @@ Para uma melhor experiência, você pode:
           id: { type: 'integer' },
           nickname: { type: 'string' },
           email: { type: 'string' },
-          role: { type: 'string', enum: ['admin', 'city_hall', 'regular'] },
+          role: { type: 'string', enum: ['admin', 'city_hall', 'user'] },
+          fullName: { type: 'string' },
+          city: { type: 'string' },
+          state: { type: 'string' },
+          age: { type: 'integer' },
+          phone: { type: 'string' },
+          bio: { type: 'string' },
+          avatarUrl: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' }
+        }
+      },
+      Session: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          token: { type: 'string' },
+          deviceInfo: { type: 'object' },
+          deviceId: { type: 'string' },
+          accessCount: { type: 'integer' },
+          isActive: { type: 'boolean' },
+          lastUsed: { type: 'string', format: 'date-time' }
+        }
+      },
+      ActivityLog: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          type: { type: 'string' },
+          description: { type: 'string' },
+          deviceInfo: { type: 'object' },
           createdAt: { type: 'string', format: 'date-time' }
         }
       },
@@ -111,6 +143,148 @@ Para uma melhor experiência, você pode:
     }
   },
   paths: {
+    '/api/auth/send-verification-code': {
+      post: {
+        tags: ['Autenticação'],
+        summary: 'Enviar código de verificação',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                  email: { type: 'string', format: 'email' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Código enviado com sucesso'
+          },
+          400: {
+            description: 'Email já cadastrado ou inválido'
+          }
+        }
+      }
+    },
+    '/api/auth/verify-code': {
+      post: {
+        tags: ['Autenticação'],
+        summary: 'Verificar código recebido',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email', 'code', 'nickname', 'password'],
+                properties: {
+                  email: { type: 'string' },
+                  code: { type: 'string' },
+                  nickname: { type: 'string' },
+                  password: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Código verificado com sucesso'
+          }
+        }
+      }
+    },
+    '/api/auth/devices': {
+      get: {
+        tags: ['Autenticação'],
+        summary: 'Listar dispositivos conectados',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Lista de dispositivos',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/Session'
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/api/auth/devices/revoke': {
+      post: {
+        tags: ['Autenticação'],
+        summary: 'Revogar acesso de dispositivo',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['sessionId'],
+                properties: {
+                  sessionId: { type: 'integer' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Acesso revogado com sucesso'
+          }
+        }
+      }
+    },
+    '/api/auth/upload-avatar': {
+      post: {
+        tags: ['Autenticação'],
+        summary: 'Upload de avatar',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  avatar: {
+                    type: 'string',
+                    format: 'binary'
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Avatar atualizado com sucesso',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    avatarUrl: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     '/api/register': {
       post: {
         tags: ['Autenticação'],
@@ -977,16 +1151,10 @@ router.get('/', swaggerUi.setup(swaggerDocument, {
     .swagger-ui .info__contact { padding: 1em 0 }
     .swagger-ui .link { color: #4990e2 }
     .swagger-ui .markdown p { margin: 1em 0 }
+    .swagger-ui .scheme-container { position: sticky; top: 0; z-index: 1; }
   `,
   customSiteTitle: "TerraurB API Documentation",
-  customfavIcon: "/favicon.ico",
-  customLinks: [
-    {
-      url: '/api/docs/json',
-      name: '⬇️ Download OpenAPI JSON',
-      target: '_blank'
-    }
-  ]
+  customfavIcon: "/favicon.ico"
 }));
 
 module.exports = router;
