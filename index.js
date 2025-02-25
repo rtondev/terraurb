@@ -14,7 +14,15 @@ const statsRoutes = require('./routes/stats');
 
 const app = express();
 
-app.use(cors());
+// Configuração mais permissiva do CORS para desenvolvimento
+app.use(cors({
+  origin: '*', // Permite todas as origens
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  maxAge: 86400 // Cache preflight por 24 horas
+}));
+
 app.use(express.json());
 app.use(express.static('public'));
 
