@@ -1,314 +1,223 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../config/api';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { User, Mail, MapPin, Calendar, FileText, MessageSquare, Settings, LogOut } from 'lucide-react';
+import Layout from '../components/Layout';
+import api from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function Profile() {
+function Profile() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
-  const [complaints, setComplaints] = useState([]);
+  const { logout } = useAuth();
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
+  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const complaintsPerPage = 3;
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('Token não encontrado');
-        }
+    loadUserData();
+  }, []);
 
-        const [profileData, complaintsData] = await Promise.all([
-          fetch(`${API_BASE_URL}/auth/me`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          }).then(res => {
-            if (!res.ok) throw new Error('Falha ao obter perfil');
-            return res.json();
-          }),
-          fetch(`${API_BASE_URL}/complaints?userId=current`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          }).then(res => {
-            if (!res.ok) throw new Error('Falha ao obter denúncias');
-            return res.json();
-          })
-        ]);
-        setProfile(profileData);
-        setComplaints(complaintsData);
-        setFormData({
-          ...formData,
-          name: profileData.name,
-          email: profileData.email
-        });
-      } catch (err) {
-        setError('Falha ao carregar perfil');
-        navigate('/login');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [navigate]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
-      setError('As senhas não coincidem');
-      return;
-    }
-
+  const loadUserData = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Token não encontrado');
-      }
+      const [userResponse, complaintsResponse] = await Promise.all([
+        api.get('/api/auth/me'),
+        api.get('/api/complaints/my')
+      ]);
 
-      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword || undefined
-        })
+      console.log('Dados do usuário:', userResponse.data);
+      console.log('Denúncias:', complaintsResponse.data);
+
+      setUserData({
+        user: userResponse.data,
+        complaints: complaintsResponse.data.complaints || [],
+        stats: complaintsResponse.data.stats || {
+          total: 0,
+          resolved: 0,
+          inProgress: 0,
+          pending: 0
+        }
       });
-
-      if (!response.ok) {
-        throw new Error('Falha ao atualizar perfil');
-      }
-
-      const updatedProfile = await response.json();
-      setProfile(updatedProfile);
-      setIsEditing(false);
-      setFormData(prev => ({
-        ...prev,
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      }));
-    } catch (err) {
-      setError('Falha ao atualizar perfil');
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      setError('Erro ao carregar dados do perfil');
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-      </div>
-    );
-  }
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  if (loading) return <div>Carregando...</div>;
+  if (error) return <div>{error}</div>;
+  if (!userData) return <div>Usuário não encontrado</div>;
+
+  const { user, complaints } = userData;
+  const totalPages = Math.ceil((complaints?.length || 0) / complaintsPerPage);
+  const paginatedComplaints = complaints?.slice(
+    (currentPage - 1) * complaintsPerPage,
+    currentPage * complaintsPerPage
+  );
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900">Meu Perfil</h1>
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-4 py-5 sm:p-6">
-          {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
+    <Layout>
+      <div className="max-w-3xl mx-auto min-h-screen border-x border-gray-200">
+        {/* Header */}
+        <div className="border-b border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold">Perfil</h1>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/configuracoes"
+                className="p-2 text-gray-600 hover:text-gray-900 rounded-full hover:bg-gray-100"
+              >
+                <Settings className="w-6 h-6" />
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-red-600 hover:text-red-700 rounded-full hover:bg-red-50"
+                title="Sair"
+              >
+                <LogOut className="w-6 h-6" />
+              </button>
             </div>
-          )}
-
-          {isEditing ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="sm:col-span-4">
-                <label htmlFor="name" className="block text-sm/6 font-medium text-gray-900">
-                  Nome
-                </label>
-                <div className="mt-2">
-                  <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                    <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">👤</div>
-                    <input
-                      type="text"
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      required
-                      className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="sm:col-span-4">
-                <label htmlFor="email" className="block text-sm/6 font-medium text-gray-900">
-                  Email
-                </label>
-                <div className="mt-2">
-                  <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                    <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">@</div>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      disabled
-                      className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6 bg-gray-50"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="sm:col-span-4">
-                <label htmlFor="currentPassword" className="block text-sm/6 font-medium text-gray-900">
-                  Senha Atual
-                </label>
-                <div className="mt-2">
-                  <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                    <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">🔒</div>
-                    <input
-                      type="password"
-                      id="currentPassword"
-                      name="currentPassword"
-                      value={formData.currentPassword}
-                      onChange={handleChange}
-                      required
-                      className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="sm:col-span-4">
-                <label htmlFor="newPassword" className="block text-sm/6 font-medium text-gray-900">
-                  Nova Senha (opcional)
-                </label>
-                <div className="mt-2">
-                  <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                    <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">🔒</div>
-                    <input
-                      type="password"
-                      id="newPassword"
-                      name="newPassword"
-                      value={formData.newPassword}
-                      onChange={handleChange}
-                      minLength={6}
-                      className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="sm:col-span-4">
-                <label htmlFor="confirmPassword" className="block text-sm/6 font-medium text-gray-900">
-                  Confirmar Nova Senha
-                </label>
-                <div className="mt-2">
-                  <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                    <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">🔒</div>
-                    <input
-                      type="password"
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      minLength={6}
-                      className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="bg-green-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Salvar
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900">Informações Pessoais</h3>
-                <dl className="mt-2 space-y-3">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Nome</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{profile.name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Email</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{profile.email}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="bg-green-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Editar Perfil
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Minhas Denúncias</h3>
-          {complaints.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {complaints.map(complaint => (
-                <li key={complaint.id} className="py-4">
-                  <div className="flex justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900">{complaint.title}</h4>
-                      <p className="text-sm text-gray-500">{complaint.address}</p>
+        {/* Banner e Avatar */}
+        <div className="relative">
+          <div className="h-48 bg-gradient-to-r from-blue-600 to-blue-400"></div>
+          <div className="absolute -bottom-16 left-4">
+            <div className="w-32 h-32 rounded-full border-4 border-white bg-white flex items-center justify-center">
+              <User className="w-16 h-16 text-gray-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Informações do Perfil */}
+        <div className="px-4 pt-20 pb-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xl font-bold">@{user.nickname}</h2>
+          </div>
+
+          <div className="mt-4 space-y-2 text-gray-600">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              <span>{user.email}</span>
+            </div>
+            {user.city && (
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                <span>{user.city}</span>
+              </div>
+            )}
+            {user.age && (
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>Idade: {user.age} anos</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Denúncias */}
+        <div className="border-t border-gray-200">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg">Denúncias</h3>
+              <Link
+                to="/denuncias/nova"
+                className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors text-sm font-medium"
+              >
+                Nova Denúncia
+              </Link>
+            </div>
+          </div>
+
+          {!complaints?.length ? (
+            <div className="p-8 text-center">
+              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600">Nenhuma denúncia ainda</p>
+              <Link
+                to="/denuncias/nova"
+                className="mt-4 inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors text-sm font-medium"
+              >
+                Criar primeira denúncia
+              </Link>
+            </div>
+          ) : (
+            <div>
+              {paginatedComplaints.map(complaint => (
+                <div
+                  key={complaint.id}
+                  className="p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium
+                        ${complaint.status === 'Resolvido' ? 'bg-green-100 text-green-700' : 
+                        complaint.status === 'Em Andamento' ? 'bg-yellow-100 text-yellow-700' : 
+                        'bg-blue-100 text-blue-700'}`}
+                      >
+                        {complaint.status}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {new Date(complaint.createdAt).toLocaleDateString()}
+                      </span>
                     </div>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {complaint.status}
-                    </span>
+                    <p className="text-gray-900">{complaint.description}</p>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <MapPin className="w-4 h-4" />
+                      <span className="text-sm">{complaint.location}</span>
+                    </div>
+                    {complaint.Tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {complaint.Tags.map(tag => (
+                          <span
+                            key={tag.id}
+                            className="px-2 py-0.5 bg-gray-100 rounded-full text-xs text-gray-600"
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <Link
+                      to={`/denuncias/${complaint.id}`}
+                      className="self-end text-blue-500 hover:text-blue-600 text-sm font-medium"
+                    >
+                      Ver detalhes
+                    </Link>
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
-          ) : (
-            <p className="text-gray-500 text-sm">Você ainda não fez nenhuma denúncia.</p>
+
+              {/* Paginação */}
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-1 p-4">
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`w-8 h-8 rounded-full text-sm font-medium
+                        ${currentPage === i + 1
+                          ? 'bg-blue-500 text-white'
+                          : 'text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
+export default Profile; 

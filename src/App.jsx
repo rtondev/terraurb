@@ -1,8 +1,108 @@
-import { RouterProvider } from 'react-router-dom';
-import { router } from './routes';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Home from './pages/Home';
+import Complaints from './pages/Complaints';
+import Tags from './pages/Tags';
+import Reports from './pages/Reports';
+import Users from './pages/Users';
+import Profile from './pages/Profile';
+import Logs from './pages/Logs';
+import CreateComplaint from './pages/CreateComplaint';
+import ComplaintDetails from './pages/ComplaintDetails';
+import Settings from './pages/Settings';
+import EditProfile from './pages/EditProfile';
+// Componente para proteger rotas
+const PrivateRoute = ({ children }) => {
+  const { token } = useAuth();
+  return token ? children : <Navigate to="/login" />;
+};
 
-export default function App() {
+// Componente para proteger rotas de admin
+const AdminRoute = ({ children }) => {
+  const { user, isAuthenticated } = useAuth();
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" />;
+  }
+
+  return children;
+};
+
+function App() {
   return (
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Rotas públicas */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          {/* Rotas protegidas */}
+          <Route path="/" element={
+            <PrivateRoute>
+              <Home />
+            </PrivateRoute>
+          } />
+          <Route path="/denuncias" element={
+            <PrivateRoute>
+              <Complaints />
+            </PrivateRoute>
+          } />
+          <Route path="/denuncias/nova" element={
+            <PrivateRoute>
+              <CreateComplaint />
+            </PrivateRoute>
+          } />
+          <Route path="/denuncias/:id" element={
+            <PrivateRoute>
+              <ComplaintDetails />
+            </PrivateRoute>
+          } />
+          <Route path="/tags" element={
+            <AdminRoute>
+              <Tags />
+            </AdminRoute>
+          } />
+          <Route path="/reportes" element={
+            <AdminRoute>
+              <Reports />
+            </AdminRoute>
+          } />
+          <Route path="/usuarios" element={
+            <AdminRoute>
+              <Users />
+            </AdminRoute>
+          } />
+          <Route path="/perfil" element={
+            <PrivateRoute>
+              <Profile />
+            </PrivateRoute>
+          } />
+          <Route path="/configuracoes" element={
+            <PrivateRoute>
+              <Settings />
+            </PrivateRoute>
+          } />
+          <Route path="/configuracoes/perfil" element={
+            <PrivateRoute>
+              <EditProfile />
+            </PrivateRoute>
+          } />
+          <Route path="/configuracoes/logs" element={
+            <PrivateRoute>
+              <Logs />
+            </PrivateRoute>
+          } />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
+
+export default App;

@@ -1,170 +1,249 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../config/api';
+import { Mail, Lock, User, Check, X } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 
-export default function Register() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
-  });
+function Register() {
+  const navigate = useNavigate();
+  const { register } = useAuth();
+  const [step, setStep] = useState(1); // 1: dados iniciais, 2: verificação
+  const [nickname, setNickname] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [nicknameAvailable, setNicknameAvailable] = useState(null);
+  const [isCheckingNickname, setIsCheckingNickname] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('As senhas não coincidem');
+  // Função para verificar disponibilidade do nickname
+  const checkNicknameAvailability = async (value) => {
+    if (value.length < 3) {
+      setNicknameAvailable(false);
       return;
     }
 
-    setLoading(true);
-
+    setIsCheckingNickname(true);
     try {
-      const { confirmPassword, ...userData } = formData;
-      const response = await fetch(`${API_BASE_URL}/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
+      const response = await api.get(`/api/auth/check-nickname/${value}`);
+      setNicknameAvailable(response.data.available);
+    } catch (error) {
+      console.error('Erro ao verificar nickname:', error);
+      setNicknameAvailable(false);
+    } finally {
+      setIsCheckingNickname(false);
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error('Falha no registro');
-      }
+  const handleNicknameChange = (e) => {
+    const value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    setNickname(value);
+    checkNicknameAvailability(value);
+  };
 
-      await response.json();
-      navigate('/login');
-    } catch (err) {
-      setError('Falha ao criar conta. Tente novamente.');
+  const handleSendVerificationCode = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await api.post('/api/auth/send-verification-code', { email });
+      setStep(2);
+    } catch (error) {
+      setError(error.response?.data?.error || 'Erro ao enviar código');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  const handleVerifyAndRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Envia código e dados para verificação
+      const verifyResponse = await api.post('/api/auth/verify-code', { 
+        email, 
+        code: verificationCode,
+        nickname,
+        password
+      });
+
+      if (!verifyResponse.data.verified) {
+        setError('Código inválido');
+        return;
+      }
+
+      // Se o código for válido, finaliza o registro
+      const result = await register(email);
+      if (result.success) {
+        navigate('/login');
+      } else {
+        setError(result.error);
+      }
+    } catch (error) {
+      setError(error.response?.data?.error || 'Erro na verificação');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="flex h-screen bg-blue-700">
-      <div className="w-full max-w-xs m-auto bg-white rounded-lg shadow-lg p-5">
-        <header>
-          <img className="w-20 mx-auto mb-5" src="https://img.icons8.com/fluent/344/year-of-tiger.png" alt="logo" />
-        </header>
+    <div className="min-h-screen flex">
+      {/* Lado Esquerdo - Banner */}
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-500 text-white p-12 flex-col justify-between">
+        <div>
+          <img src="/logo.svg" alt="TerraUrb Logo" className="h-12 mb-8" />
+          <h2 className="text-4xl font-bold mb-4">
+            Crie sua conta no TerraUrb
+          </h2>
+          <p className="text-lg opacity-90">
+            Junte-se a nós para ajudar a manter sua cidade mais limpa e organizada.
+            Denuncie terrenos baldios e acompanhe as resoluções.
+          </p>
+        </div>
+        <div className="text-sm opacity-75">
+          © 2024 TerraUrb. Todos os direitos reservados.
+        </div>
+      </div>
 
-        {error && (
-          <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
-            {error}
+      {/* Lado Direito - Formulário */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+        <div className="w-full max-w-md">
+          <div className="lg:hidden mb-8">
+            <img src="/logo.svg" alt="TerraUrb Logo" className="h-12 mx-auto" />
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="sm:col-span-4">
-            <label htmlFor="name" className="block text-sm/6 font-medium text-gray-900">Nome</label>
-            <div className="mt-2">
-              <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">👤</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Criar conta
+          </h1>
+          <p className="text-gray-600 mb-8">
+            Preencha seus dados para se cadastrar
+          </p>
+
+          {error && (
+            <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+
+          {step === 1 ? (
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleSendVerificationCode();
+            }} className="space-y-4">
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
                   type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
+                  value={nickname}
+                  onChange={handleNicknameChange}
+                  className={`w-full pl-10 pr-10 py-3 border rounded-lg focus:ring-2 outline-none transition-colors
+                    ${isCheckingNickname ? 'border-gray-300' : 
+                      nicknameAvailable ? 'border-green-500 focus:ring-green-200' : 
+                      nicknameAvailable === false ? 'border-red-500 focus:ring-red-200' :
+                      'border-gray-300 focus:ring-blue-500'}`}
+                  placeholder="Nome de usuário"
                   required
-                  className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                  placeholder="Digite seu nome completo"
+                  disabled={loading}
                 />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {isCheckingNickname ? (
+                    <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent" />
+                  ) : nicknameAvailable !== null && (
+                    nicknameAvailable ? (
+                      <Check className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <X className="w-5 h-5 text-red-500" />
+                    )
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="sm:col-span-4">
-            <label htmlFor="email" className="block text-sm/6 font-medium text-gray-900">Email</label>
-            <div className="mt-2">
-              <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">@</div>
+
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
                   type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="Email"
                   required
-                  className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                  placeholder="Digite seu email principal"
+                  disabled={loading}
                 />
               </div>
-            </div>
-          </div>
-          <div className="sm:col-span-4">
-            <label htmlFor="password" className="block text-sm/6 font-medium text-gray-900">Senha</label>
-            <div className="mt-2">
-              <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">🔒</div>
+
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
                   type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="Senha"
                   required
-                  minLength={6}
-                  className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                  placeholder="Crie uma senha forte (mín. 6 caracteres)"
+                  disabled={loading}
                 />
               </div>
-            </div>
-          </div>
-          <div className="sm:col-span-4">
-            <label htmlFor="confirmPassword" className="block text-sm/6 font-medium text-gray-900">Confirmar Senha</label>
-            <div className="mt-2">
-              <div className="flex items-center rounded-md bg-white pl-3 outline-1 -outline-offset-1 outline-gray-300 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-600">
-                <div className="shrink-0 text-base text-gray-500 select-none sm:text-sm/6">🔒</div>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  minLength={6}
-                  className="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6"
-                  placeholder="Digite a senha novamente"
-                />
+
+              <button
+                type="submit"
+                disabled={loading || !nicknameAvailable || isCheckingNickname}
+                className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Enviando...' : 'Continuar'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyAndRegister} className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Enviamos um código de verificação para {email}
+                </p>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Digite o código"
+                    maxLength={6}
+                    required
+                  />
+                </div>
               </div>
-            </div>
+
+              <button
+                type="submit"
+                disabled={loading || verificationCode.length !== 6}
+                className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Verificando...' : 'Criar conta'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendVerificationCode}
+                disabled={loading}
+                className="w-full text-blue-500 py-2 text-sm hover:underline"
+              >
+                Reenviar código
+              </button>
+            </form>
+          )}
+
+          <div className="mt-6 text-center">
+            <p className="text-gray-600">
+              Já tem uma conta?{' '}
+              <Link to="/login" className="text-blue-500 font-medium hover:underline">
+                Fazer login
+              </Link>
+            </p>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded-lg transition duration-200 mb-4"
-          >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="w-5 h-5 border-t-2 border-white border-solid rounded-full animate-spin mr-2"></div>
-                Cadastrando...
-              </div>
-            ) : (
-              'Cadastrar'
-            )}
-          </button>
-        </form>
-        <p className="mt-4 text-center text-gray-900">
-          Já tem uma conta?{' '}
-          <Link to="/login" className="text-blue-700 hover:text-blue-800 underline">
-            Faça login
-          </Link>
-        </p>
+        </div>
       </div>
     </div>
   );
 }
+
+export default Register; 
