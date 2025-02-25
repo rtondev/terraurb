@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { sequelize } = require('./models/db');
-const { router: authRoutes } = require('./routes/auth');
+const { router: authRouter } = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
 const commentRoutes = require('./routes/comments');
@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Routes
-app.use('/api', authRoutes);
+app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/comments', commentRoutes);

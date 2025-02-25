@@ -3,6 +3,7 @@ const router = express.Router();
 const { Complaint, ComplaintLog } = require('../models/complaint');
 const { Tag } = require('../models/tag');
 const { authenticateToken } = require('./auth');
+const { User } = require('../models/db');
 
 // Middleware to check if user is authorized to change complaint status
 const canChangeStatus = (req, res, next) => {
@@ -12,40 +13,34 @@ const canChangeStatus = (req, res, next) => {
   next();
 };
 
-router.post('/', authenticateToken, async (req, res) => {
+// Get my complaints (deve vir ANTES das rotas com parâmetros)
+router.get('/my', authenticateToken, async (req, res) => {
   try {
-    const { description, location, tagIds, polygonCoordinates } = req.body;
-
-    if (!description || !location) {
-      return res.status(400).json({ error: 'Descrição e localização são obrigatórios' });
-    }
-
-    if (tagIds && !Array.isArray(tagIds)) {
-      return res.status(400).json({ error: 'tagIds deve ser um array' });
-    }
-
-    const complaint = await Complaint.create({
-      description,
-      location,
-      polygonCoordinates, // Salvando as coordenadas do polígono
-      userId: req.user.id
+    const complaints = await Complaint.findAll({
+      where: { userId: req.user.id },
+      include: [
+        { model: Tag },
+        { association: 'author', attributes: ['nickname'] },
+        { 
+          model: ComplaintLog,
+          include: [{ association: 'changedBy', attributes: ['nickname'] }],
+          order: [['createdAt', 'DESC']]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
     });
 
-    if (tagIds && tagIds.length > 0) {
-      await complaint.setTags(tagIds);
-    }
+    const stats = {
+      total: complaints.length,
+      resolved: complaints.filter(c => c.status === 'Resolvido').length,
+      inProgress: complaints.filter(c => c.status === 'Em Andamento').length,
+      pending: complaints.filter(c => c.status === 'Em Análise').length
+    };
 
-    // Create initial log entry
-    await ComplaintLog.create({
-      ComplaintId: complaint.id,
-      newStatus: 'Em Análise',
-      changedById: req.user.id
-    });
-
-    res.status(201).json(complaint);
+    res.json({ complaints, stats });
   } catch (error) {
-    console.error('Erro ao criar denúncia:', error);
-    res.status(500).json({ error: 'Erro ao criar denúncia' });
+    console.error('Erro ao buscar minhas denúncias:', error);
+    res.status(500).json({ error: 'Erro ao buscar denúncias' });
   }
 });
 
@@ -86,9 +81,58 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Denúncia não encontrada' });
     }
 
+    console.log('Retornando denúncia:', complaint.toJSON());
     res.json(complaint);
   } catch (error) {
+    console.error('Erro ao buscar denúncia:', error);
     res.status(500).json({ error: 'Erro ao buscar denúncia' });
+  }
+});
+
+// Get public user profile with complaints (deve vir DEPOIS de /my)
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Buscar usuário
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'nickname', 'role', 'city', 'state']
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Buscar denúncias
+    const complaints = await Complaint.findAll({
+      where: { userId },
+      include: [
+        { model: Tag },
+        { association: 'author', attributes: ['nickname'] },
+        { 
+          model: ComplaintLog,
+          include: [{ association: 'changedBy', attributes: ['nickname'] }],
+          order: [['createdAt', 'DESC']]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const stats = {
+      total: complaints.length,
+      resolved: complaints.filter(c => c.status === 'Resolvido').length,
+      inProgress: complaints.filter(c => c.status === 'Em Andamento').length,
+      pending: complaints.filter(c => c.status === 'Em Análise').length
+    };
+
+    res.json({
+      user,
+      stats,
+      complaints
+    });
+  } catch (error) {
+    console.error('Erro ao buscar perfil do usuário:', error);
+    res.status(500).json({ error: 'Erro ao buscar dados do usuário' });
   }
 });
 
@@ -129,6 +173,49 @@ router.patch('/:id/status', authenticateToken, canChangeStatus, async (req, res)
     res.json(complaint);
   } catch (error) {
     res.status(500).json({ error: 'Erro ao atualizar status da denúncia' });
+  }
+});
+
+// Create complaint
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const { description, location, tagIds, polygonCoordinates } = req.body;
+
+    if (!description || !location) {
+      return res.status(400).json({ error: 'Descrição e localização são obrigatórios' });
+    }
+
+    console.log('Recebendo dados da denúncia:', {
+      description,
+      location,
+      tagIds,
+      polygonCoordinates
+    });
+
+    const complaint = await Complaint.create({
+      description,
+      location,
+      polygonCoordinates,
+      userId: req.user.id
+    });
+
+    console.log('Denúncia criada:', complaint.toJSON());
+
+    if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
+      await complaint.setTags(tagIds);
+    }
+
+    // Criar log inicial
+    await ComplaintLog.create({
+      ComplaintId: complaint.id,
+      newStatus: 'Em Análise',
+      changedById: req.user.id
+    });
+
+    res.status(201).json(complaint);
+  } catch (error) {
+    console.error('Erro ao criar denúncia:', error);
+    res.status(500).json({ error: 'Erro ao criar denúncia' });
   }
 });
 
