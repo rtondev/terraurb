@@ -2,6 +2,15 @@ const { Sequelize, DataTypes } = require('sequelize');
 const { sequelize, User } = require('./db');
 
 const Complaint = sequelize.define('Complaint', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
   description: {
     type: DataTypes.TEXT,
     allowNull: false
@@ -10,28 +19,19 @@ const Complaint = sequelize.define('Complaint', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  // Adicionando o campo para as coordenadas do polígono
-  polygonCoordinates: {
-    type: DataTypes.JSON, // Usando JSON para armazenar o array de coordenadas
-    allowNull: true
-  },
   status: {
-    type: DataTypes.ENUM(
-      'Em Análise',
-      'Em Andamento',
-      'Resolvido',
-      'Cancelado',
-      'Em Verificação',
-      'Reaberto'
-    ),
-    allowNull: false,
-    defaultValue: 'Em Análise'
+    type: DataTypes.ENUM('pending', 'in_progress', 'resolved', 'rejected'),
+    defaultValue: 'pending'
+  },
+  images: {
+    type: DataTypes.JSON,
+    allowNull: true
   },
   userId: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: User,
+      model: 'User',
       key: 'id'
     }
   }
@@ -50,16 +50,10 @@ const ComplaintLog = sequelize.define('ComplaintLog', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: User,
+      model: 'User',
       key: 'id'
     }
   }
 });
-
-// Associations
-Complaint.hasMany(ComplaintLog);
-ComplaintLog.belongsTo(Complaint);
-ComplaintLog.belongsTo(User, { as: 'changedBy', foreignKey: 'changedById' });
-Complaint.belongsTo(User, { as: 'author', foreignKey: 'userId' });
 
 module.exports = { Complaint, ComplaintLog };

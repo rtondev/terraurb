@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const { sequelize } = require('./models/db');
+const { syncDatabase } = require('./models');
 const { router: authRouter } = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
@@ -31,19 +31,25 @@ app.use('/api/stats', statsRoutes);
 // Database sync and server start
 const PORT = process.env.PORT || 3000;
 
-sequelize.sync().then(async () => {
-  console.log('Database synchronized');
+// Função assíncrona para inicializar o servidor
+const initializeServer = async () => {
   try {
+    await syncDatabase();
+    console.log('Database synchronized');
+    
     await createDefaultAdmin();
     console.log('Default admin user setup completed');
+    
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
   } catch (error) {
-    console.error('Error setting up default admin:', error);
+    console.error('Erro ao iniciar servidor:', error);
+    process.exit(1);
   }
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-}).catch(err => {
-  console.error('Error syncing database:', err);
-});
+};
+
+// Iniciar o servidor
+initializeServer();
 
 
