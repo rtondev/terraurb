@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, User, Check, X } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 
 function Register() {
   const navigate = useNavigate();
-  const { register } = useAuth();
   const [step, setStep] = useState(1); // 1: username, 2: email/password, 3: verification
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
@@ -16,6 +14,15 @@ function Register() {
   const [loading, setLoading] = useState(false);
   const [nicknameAvailable, setNicknameAvailable] = useState(null);
   const [isCheckingNickname, setIsCheckingNickname] = useState(false);
+
+  // Adiciona um debounce para a verificação do nickname
+  const [debouncedCheckNickname] = useState(() => {
+    let timeoutId;
+    return (value) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => checkNicknameAvailability(value), 500);
+    };
+  });
 
   // Função para verificar disponibilidade do nickname
   const checkNicknameAvailability = async (value) => {
@@ -39,17 +46,31 @@ function Register() {
   const handleNicknameChange = (e) => {
     const value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
     setNickname(value);
-    checkNicknameAvailability(value);
+    
+    // Limpa o status de disponibilidade enquanto digita
+    setNicknameAvailable(null);
+    
+    // Só verifica após ter pelo menos 3 caracteres
+    if (value.length >= 3) {
+      debouncedCheckNickname(value);
+    } else {
+      setNicknameAvailable(false);
+    }
   };
 
-  const handleNextStep = async () => {
+  const handleNextStep = async (e) => {
+    if (e) e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      if (step === 1 && nicknameAvailable) {
+      if (step === 1) {
+        if (!nicknameAvailable || nickname.length < 3) {
+          setError('Por favor, escolha um nome de usuário válido');
+          setLoading(false);
+          return;
+        }
         setStep(2);
-        setLoading(false);
       } else if (step === 2) {
         if (!email || !password) {
           setError('Email e senha são obrigatórios');
@@ -58,19 +79,24 @@ function Register() {
         }
 
         try {
-          await api.post('/api/auth/send-verification-code', { email });
-          setStep(3);
-        } catch (error) {
-          if (error.response?.data?.error === 'Email já cadastrado') {
-            setError('Este email já está cadastrado');
+          const response = await api.post('/api/auth/send-verification-code', { 
+            email,
+            nickname
+          });
+          
+          if (response.data.success) {
+            setStep(3);
           } else {
-            setError('Erro ao enviar código. Por favor, tente novamente.');
+            setError('Erro ao enviar código de verificação');
           }
-          console.error('Erro detalhado:', error.response?.data);
+        } catch (error) {
+          console.error('Erro ao enviar código:', error);
+          setError(error.response?.data?.error || 'Erro ao enviar código. Por favor, tente novamente.');
         }
       }
     } catch (error) {
-      setError(error.response?.data?.error || 'Erro ao prosseguir');
+      console.error('Erro no processo:', error);
+      setError(error.response?.data?.error || 'Erro ao prosseguir. Por favor, tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -82,28 +108,47 @@ function Register() {
     setLoading(true);
 
     try {
-      // Envia código e dados para verificação
+      console.log('Enviando dados para verificação:', {
+        email,
+        code: verificationCode,
+        nickname
+      });
+
+      // Primeiro verifica o código
       const verifyResponse = await api.post('/api/auth/verify-code', { 
         email, 
         code: verificationCode,
-        nickname,
-        password
+        nickname
       });
+
+      console.log('Resposta da verificação:', verifyResponse.data);
 
       if (!verifyResponse.data.verified) {
         setError('Código inválido');
+        setLoading(false);
         return;
       }
 
-      // Se o código for válido, finaliza o registro
-      const result = await register(email);
-      if (result.success) {
-        navigate('/login');
+      // Se o código for válido, tenta registrar
+      const registerResponse = await api.post('/api/auth/register', {
+        nickname,
+        email,
+        password,
+        verificationCode
+      });
+
+      if (registerResponse.data.success) {
+        navigate('/login', { 
+          state: { message: 'Conta criada com sucesso! Faça login para continuar.' }
+        });
       } else {
-        setError(result.error);
+        setError('Erro ao criar conta. Por favor, tente novamente.');
       }
     } catch (error) {
-      setError(error.response?.data?.error || 'Erro na verificação');
+      console.error('Erro no registro:', error);
+      const errorMessage = error.response?.data?.error || 'Erro ao completar o registro';
+      console.log('Mensagem de erro:', errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -114,15 +159,22 @@ function Register() {
     setLoading(true);
 
     try {
-      await api.post('/api/auth/send-verification-code', { email });
-      setError(''); // Limpar qualquer erro anterior
-      // Mostrar mensagem de sucesso temporária
-      const successMessage = document.createElement('div');
-      successMessage.className = 'text-green-500 text-sm mt-2';
-      successMessage.textContent = 'Código reenviado com sucesso!';
-      document.querySelector('form').appendChild(successMessage);
-      setTimeout(() => successMessage.remove(), 3000);
+      console.log('Reenviando código para:', email);
+      const response = await api.post('/api/auth/send-verification-code', { 
+        email,
+        nickname // Incluir nickname aqui também
+      });
+
+      if (response.data.success) {
+        // Mostrar mensagem de sucesso temporária
+        const successMessage = document.createElement('div');
+        successMessage.className = 'text-green-500 text-sm mt-2';
+        successMessage.textContent = 'Código reenviado com sucesso!';
+        document.querySelector('form').appendChild(successMessage);
+        setTimeout(() => successMessage.remove(), 3000);
+      }
     } catch (error) {
+      console.error('Erro ao reenviar:', error);
       setError(error.response?.data?.error || 'Erro ao reenviar código');
     } finally {
       setLoading(false);
@@ -190,10 +242,7 @@ function Register() {
           )}
 
           {step === 1 ? (
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleNextStep();
-            }} className="space-y-4">
+            <form onSubmit={handleNextStep} className="space-y-4">
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -201,18 +250,20 @@ function Register() {
                   value={nickname}
                   onChange={handleNicknameChange}
                   className={`w-full pl-10 pr-10 py-3 border rounded-lg focus:ring-2 outline-none transition-colors
-                    ${isCheckingNickname ? 'border-gray-300' : 
+                    ${nickname.length < 3 ? 'border-gray-300' :
+                      isCheckingNickname ? 'border-gray-300' : 
                       nicknameAvailable ? 'border-green-500 focus:ring-green-200' : 
                       nicknameAvailable === false ? 'border-red-500 focus:ring-red-200' :
                       'border-gray-300 focus:ring-blue-500'}`}
                   placeholder="Nome de usuário"
                   required
+                  minLength={3}
                   disabled={loading}
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   {isCheckingNickname ? (
                     <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent" />
-                  ) : nicknameAvailable !== null && (
+                  ) : nickname.length >= 3 && nicknameAvailable !== null && (
                     nicknameAvailable ? (
                       <Check className="w-5 h-5 text-green-500" />
                     ) : (
@@ -222,19 +273,22 @@ function Register() {
                 </div>
               </div>
 
+              {nickname.length > 0 && nickname.length < 3 && (
+                <p className="text-sm text-red-500">
+                  O nome de usuário deve ter pelo menos 3 caracteres
+                </p>
+              )}
+
               <button
                 type="submit"
-                disabled={loading || !nicknameAvailable || isCheckingNickname}
+                disabled={loading || !nicknameAvailable || isCheckingNickname || nickname.length < 3}
                 className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
                 {loading ? 'Verificando...' : 'Continuar'}
               </button>
             </form>
           ) : step === 2 ? (
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleNextStep();
-            }} className="space-y-4">
+            <form onSubmit={handleNextStep} className="space-y-4">
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input

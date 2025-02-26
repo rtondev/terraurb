@@ -8,13 +8,13 @@ import Tags from './pages/Tags';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
-import Logs from './pages/Logs';
 import CreateComplaint from './pages/CreateComplaint';
 import ComplaintDetails from './pages/ComplaintDetails';
 import Settings from './pages/Settings';
 import EditProfile from './pages/EditProfile';
 import Devices from './pages/Devices';
 import PublicProfile from './pages/PublicProfile';
+import ActivityLogs from './pages/ActivityLogs';
 // Componente para proteger rotas
 const PrivateRoute = ({ children }) => {
   const { token } = useAuth();
@@ -96,14 +96,15 @@ function App() {
               <EditProfile />
             </PrivateRoute>
           } />
-          <Route path="/configuracoes/logs" element={
-            <PrivateRoute>
-              <Logs />
-            </PrivateRoute>
-          } />
+          <Route path="/configuracoes/logs" element={<ActivityLogs />} />
           <Route path="/configuracoes/dispositivos" element={
             <PrivateRoute>
               <Devices />
+            </PrivateRoute>
+          } />
+          <Route path="/configuracoes/logs" element={
+            <PrivateRoute>
+              <ActivityLogs />
             </PrivateRoute>
           } />
           <Route path="/:nickname" element={<PublicProfile />} />

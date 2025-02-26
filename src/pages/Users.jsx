@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import api from '../services/api';
-import { User, Trash2, Shield } from 'lucide-react';
+import { User, MoreVertical, UserPlus } from 'lucide-react';
 
 function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadUsers();
@@ -33,49 +34,77 @@ function Users() {
     }
   };
 
+  const filteredUsers = users.filter(user => 
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.nickname.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <Layout>
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-2xl font-semibold text-gray-800">Usuários</h1>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-semibold text-gray-800">Members</h1>
+          <button className="bg-indigo-600 text-white px-4 py-2 rounded-md flex items-center gap-2 hover:bg-indigo-700 transition-colors">
+            <UserPlus size={20} />
+            <span>Invite member(s)</span>
+          </button>
         </div>
 
-        {loading ? (
-          <div className="p-6 text-center text-gray-500">Carregando...</div>
-        ) : (
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {users.map((user) => (
-                <div key={user.id} className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center">
-                      <User className="h-10 w-10 text-gray-400 bg-gray-200 rounded-full p-2" />
-                      <div className="ml-3">
-                        <h3 className="text-gray-900 font-medium">{user.nickname}</h3>
-                        <p className="text-gray-500 text-sm">{user.email}</p>
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        {/* Users List */}
+        <div className="bg-white rounded-lg shadow">
+          {loading ? (
+            <div className="p-4 text-center text-gray-500">Loading...</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {filteredUsers.map((user) => (
+                <div key={user.id} className="flex items-center justify-between p-4 hover:bg-gray-50">
+                  <div className="flex items-center gap-3">
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.nickname}
+                        className="w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-gray-400" />
                       </div>
+                    )}
+                    <div>
+                      <h3 className="font-medium text-gray-900">{user.nickname}</h3>
+                      <p className="text-sm text-gray-500">{user.email}</p>
                     </div>
-                    {user.role !== 'admin' && (
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="text-red-500 hover:text-red-600"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
+                    {user.role === 'admin' && (
+                      <span className="ml-2 px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
+                        Owner
+                      </span>
                     )}
                   </div>
-                  <div className="mt-4 flex items-center">
-                    <Shield className="h-4 w-4 text-blue-500" />
-                    <span className="ml-2 text-sm font-medium text-blue-500">
-                      {user.role === 'admin' ? 'Administrador' : 
-                       user.role === 'city_hall' ? 'Funcionário' : 'Usuário'}
-                    </span>
+                  
+                  <div className="flex items-center gap-2">
+                    <button className="p-1 hover:bg-gray-100 rounded-full">
+                      <MoreVertical className="w-5 h-5 text-gray-400" />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </Layout>
   );
