@@ -1,7 +1,6 @@
 import axios from 'axios';
 
 const api = axios.create({
-  // Use environment variable for API URL with fallback
   baseURL: 'http://localhost:3000',
   timeout: 10000,
   headers: {
@@ -37,4 +36,4 @@ api.interceptors.response.use(
   }
 );
 
-export default api; 
+export default api;
