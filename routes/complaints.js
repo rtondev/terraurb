@@ -206,13 +206,14 @@ router.patch('/:id/status', authenticateToken, canChangeStatus, async (req, res)
 // Create complaint
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { description, location, tagIds, polygonCoordinates } = req.body;
+    const { title, description, location, tagIds, polygonCoordinates } = req.body;
 
-    if (!description || !location) {
-      return res.status(400).json({ error: 'Descrição e localização são obrigatórios' });
+    if (!title || !description || !location) {
+      return res.status(400).json({ error: 'Título, descrição e localização são obrigatórios' });
     }
 
     console.log('Recebendo dados da denúncia:', {
+      title,
       description,
       location,
       tagIds,
@@ -220,6 +221,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     const complaint = await Complaint.create({
+      title,
       description,
       location,
       polygonCoordinates,

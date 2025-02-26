@@ -15,22 +15,20 @@ const statsRoutes = require('./routes/stats');
 
 const app = express();
 
+// Configurar CORS e parse do JSON
+app.use(cors());
+app.use(express.json()); // Importante! Deve vir antes das rotas
+
 // Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  if (req.method === 'POST') {
+    console.log('Headers:', req.headers);
+    console.log('Body raw:', req.body);
+  }
   next();
 });
 
-// Configuração mais permissiva do CORS
-app.use(cors({
-  origin: '*', // Permite todas as origens em desenvolvimento
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  maxAge: 86400
-}));
-
-app.use(express.json());
 app.use(express.static('public'));
 
 // Routes
