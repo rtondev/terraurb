@@ -214,10 +214,22 @@ function EditProfile() {
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     {form.avatarUrl ? (
-                      <img src={form.avatarUrl} alt="Avatar" className="h-20 w-20 rounded-full object-cover" />
+                      <div className="w-20 h-20 min-w-[80px] min-h-[80px] rounded-full overflow-hidden">
+                        <img 
+                          src={form.avatarUrl} 
+                          alt="Avatar" 
+                          className="w-full h-full object-cover"
+                          style={{
+                            minWidth: '100%',
+                            minHeight: '100%'
+                          }}
+                        />
+                      </div>
                     ) : (
-                      <div className="h-20 w-20 rounded-full bg-gray-100 flex items-center justify-center">
-                        <User className="h-10 w-10 text-gray-400" />
+                      <div className="w-20 h-20 min-w-[80px] min-h-[80px] rounded-full bg-blue-100 flex items-center justify-center">
+                        <span className="text-blue-600 font-bold text-2xl">
+                          {form.nickname ? form.nickname.charAt(0).toUpperCase() : 'U'}
+                        </span>
                       </div>
                     )}
                     <label className="absolute bottom-0 right-0 p-1 bg-white rounded-full border border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">

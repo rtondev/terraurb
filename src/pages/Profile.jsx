@@ -68,7 +68,29 @@ function Profile() {
         {/* Header */}
         <div className="border-b border-gray-200 p-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">Perfil</h1>
+            <div className="flex items-center gap-3">
+              {/* Avatar no header */}
+              <div className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full overflow-hidden">
+                {user.avatarUrl ? (
+                  <img 
+                    src={user.avatarUrl} 
+                    alt={`Foto de ${user.nickname}`}
+                    className="w-full h-full object-cover"
+                    style={{
+                      minWidth: '100%',
+                      minHeight: '100%'
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-blue-100 flex items-center justify-center">
+                    <span className="text-blue-600 font-medium text-lg">
+                      {user.nickname.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <h1 className="text-xl font-bold">{user.nickname}</h1>
+            </div>
             <div className="flex items-center gap-2">
               <Link
                 to="/configuracoes"
@@ -91,8 +113,24 @@ function Profile() {
         <div className="relative">
           <div className="h-48 bg-gradient-to-r from-blue-600 to-blue-400"></div>
           <div className="absolute -bottom-16 left-4">
-            <div className="w-32 h-32 rounded-full border-4 border-white bg-white flex items-center justify-center">
-              <User className="w-16 h-16 text-gray-600" />
+            <div className="w-32 h-32 min-w-[128px] min-h-[128px] rounded-full overflow-hidden">
+              {user.avatarUrl ? (
+                <img 
+                  src={user.avatarUrl} 
+                  alt={`Foto de ${user.nickname}`}
+                  className="w-full h-full object-cover"
+                  style={{
+                    minWidth: '100%',
+                    minHeight: '100%'
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-blue-100 border-4 border-white flex items-center justify-center">
+                  <span className="text-blue-600 font-bold text-4xl">
+                    {user.nickname.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

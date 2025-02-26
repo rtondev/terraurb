@@ -11,6 +11,7 @@ function ComplaintDetails() {
   const [complaint, setComplaint] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [mapCenter, setMapCenter] = useState(null);
 
   useEffect(() => {
     const loadComplaint = async () => {
@@ -23,6 +24,14 @@ function ComplaintDetails() {
         }
 
         setComplaint(response.data);
+
+        // Se houver coordenadas do polígono, centralizar o mapa no primeiro ponto
+        if (response.data.polygonCoordinates?.length > 0) {
+          setMapCenter({
+            lng: response.data.polygonCoordinates[0][0],
+            lat: response.data.polygonCoordinates[0][1]
+          });
+        }
       } catch (error) {
         setError('Erro ao carregar denúncia');
         console.error('Erro ao carregar denúncia:', error);
@@ -156,6 +165,8 @@ function ComplaintDetails() {
                       mapType="satellite"
                       polygonCoordinates={complaint?.polygonCoordinates}
                       readOnly={true}
+                      center={mapCenter}
+                      zoom={18}
                     />
                   </div>
                 </div>

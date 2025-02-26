@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, ChevronLeft, Crosshair } from 'lucide-react';
+import { MapPin, ChevronLeft, Crosshair, Search } from 'lucide-react';
 import Layout from '../components/Layout';
 import api from '../services/api';
 
@@ -9,6 +9,7 @@ const MapComponents = React.lazy(() => import('../components/MapComponents'));
 
 function CreateComplaint() {
   const navigate = useNavigate();
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
@@ -19,6 +20,11 @@ function CreateComplaint() {
   const [selectedPosition, setSelectedPosition] = useState(null);
   const [mapType, setMapType] = useState('streets'); // 'streets' ou 'satellite'
   const [polygonCoordinates, setPolygonCoordinates] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [mapCenter, setMapCenter] = useState(null);
+  const [mapZoom, setMapZoom] = useState(15);
+  const [isTyping, setIsTyping] = useState(false);
 
   useEffect(() => {
     loadTags();
@@ -35,7 +41,8 @@ function CreateComplaint() {
           };
           setCurrentPosition(pos);
           setSelectedPosition(pos);
-          getAddressFromCoords(pos);
+          setMapCenter(pos);
+          setMapZoom(18);
         },
         (error) => {
           console.error('Erro ao obter localização:', error);
@@ -52,6 +59,7 @@ function CreateComplaint() {
       const data = await response.json();
       if (data.display_name) {
         setLocation(data.display_name);
+        setIsTyping(false);
       }
     } catch (error) {
       console.error('Erro ao obter endereço:', error);
@@ -77,27 +85,80 @@ function CreateComplaint() {
     setError('');
     setLoading(true);
 
-    try {
-      console.log('Enviando dados:', {
-        description,
-        location,
-        tagIds: selectedTags,
-        polygonCoordinates
-      }); // Debug
+    const data = {
+      title,
+      description,
+      location,
+      tagIds: selectedTags,
+      polygonCoordinates
+    };
 
-      await api.post('/api/complaints', {
-        description,
-        location,
-        tagIds: selectedTags,
-        polygonCoordinates
-      });
-      
+    console.log('Enviando dados:', data);
+
+    try {
+      const response = await api.post('/api/complaints', data);
+      console.log('Resposta:', response.data);
       navigate('/denuncias');
     } catch (error) {
+      console.error('Erro completo:', error);
       setError(error.response?.data?.message || 'Erro ao criar denúncia');
       setLoading(false);
     }
   };
+
+  const handleInputChange = (e) => {
+    setLocation(e.target.value);
+    setIsTyping(true);
+  };
+
+  const handleSelectAddress = (result) => {
+    const position = {
+      lat: parseFloat(result.lat),
+      lng: parseFloat(result.lon)
+    };
+    
+    setLocation(result.display_name);
+    setSelectedPosition(position);
+    setMapCenter(position);
+    setMapZoom(18);
+    setSearchResults([]);
+    setIsTyping(false);
+  };
+
+  const searchAddress = async (query) => {
+    if (!query || query.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      const filteredResults = data.filter(result => 
+        result.type === 'house' || 
+        result.type === 'street' || 
+        result.type === 'residential'
+      );
+      
+      setSearchResults(filteredResults.length > 0 ? filteredResults : data);
+    } catch (error) {
+      console.error('Erro ao buscar endereços:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      searchAddress(location);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [location]);
 
   return (
     <Layout>
@@ -135,6 +196,20 @@ function CreateComplaint() {
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Título
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Digite um título breve para a denúncia..."
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Descrição
               </label>
               <textarea
@@ -157,9 +232,10 @@ function CreateComplaint() {
                   <input
                     type="text"
                     value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Endereço completo do terreno"
+                    onChange={handleInputChange}
+                    onFocus={() => setIsTyping(true)}
+                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Digite o endereço ou clique no mapa"
                     required
                   />
                   <button
@@ -170,6 +246,35 @@ function CreateComplaint() {
                   >
                     <Crosshair className="h-5 w-5" />
                   </button>
+
+                  {isTyping && searchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                      {searchResults.map((result, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => handleSelectAddress(result)}
+                          className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-start gap-2"
+                        >
+                          <Search className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {result.display_name.split(',')[0]}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {result.display_name.split(',').slice(1).join(',')}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {isSearching && (
+                    <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -187,6 +292,13 @@ function CreateComplaint() {
                       getAddressFromCoords={getAddressFromCoords}
                       onPolygonComplete={handlePolygonComplete}
                       readOnly={false}
+                      center={mapCenter}
+                      zoom={mapZoom}
+                      onMapClick={(coords) => {
+                        setSelectedPosition(coords);
+                        getAddressFromCoords(coords);
+                      }}
+                      onLocationSelect={(address) => setLocation(address)}
                     />
                   </Suspense>
                 </div>

@@ -9,41 +9,38 @@ import Feature from 'ol/Feature';
 import { Vector as VectorLayer } from 'ol/layer';
 import { Vector as VectorSource } from 'ol/source';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
-import { Draw, Modify, Snap } from 'ol/interaction';
+import { Draw } from 'ol/interaction';
 import Point from 'ol/geom/Point';
 import Polygon from 'ol/geom/Polygon';
-import { unByKey } from 'ol/Observable';
 
 function MapComponents({ 
   currentPosition, 
   selectedPosition, 
-  setSelectedPosition, 
-  mapType, 
+  setSelectedPosition,
+  mapType,
   setMapType,
   getAddressFromCoords,
   onPolygonComplete,
   readOnly = false,
-  polygonCoordinates = null
+  center,
+  zoom,
+  onMapClick,
+  onLocationSelect,
+  polygonCoordinates
 }) {
+  const mapElement = useRef(null);
   const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const drawInteractionRef = useRef(null);
   const vectorSourceRef = useRef(null);
-  const locationSourceRef = useRef(null);
+  const drawRef = useRef(null);
 
   useEffect(() => {
-    console.log('Coordenadas recebidas:', polygonCoordinates); // Debug
-    console.log('Posição atual:', currentPosition); // Debug
+    if (!mapElement.current) return;
 
-    // Fonte para o polígono
+    // Criar fontes de dados
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
 
-    // Fonte para o ponto de localização
-    const locationSource = new VectorSource();
-    locationSourceRef.current = locationSource;
-
-    // Configurar camadas e mapa
+    // Criar camadas
     const vectorLayer = new VectorLayer({
       source: vectorSource,
       style: new Style({
@@ -53,32 +50,11 @@ function MapComponents({
         stroke: new Stroke({
           color: '#4287f5',
           width: 2
-        }),
-        image: new CircleStyle({
-          radius: 7,
-          fill: new Fill({
-            color: '#4287f5'
-          })
         })
       })
     });
 
-    const locationLayer = new VectorLayer({
-      source: locationSource,
-      style: new Style({
-        image: new CircleStyle({
-          radius: 8,
-          fill: new Fill({ color: '#3B82F6' }),
-          stroke: new Stroke({ 
-            color: '#ffffff',
-            width: 2
-          })
-        })
-      }),
-      zIndex: 2
-    });
-
-    const satelliteLayer = new TileLayer({
+    const baseLayer = new TileLayer({
       source: new XYZ({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         maxZoom: 19
@@ -87,148 +63,124 @@ function MapComponents({
 
     // Criar o mapa
     const map = new Map({
-      target: mapRef.current,
-      layers: [satelliteLayer, vectorLayer, locationLayer],
+      target: mapElement.current,
+      layers: [baseLayer, vectorLayer],
       view: new View({
         center: fromLonLat([
-          currentPosition?.lng || -46.6333,
-          currentPosition?.lat || -23.5505
+          center?.lng || currentPosition?.lng || -46.6333,
+          center?.lat || currentPosition?.lat || -23.5505
         ]),
-        zoom: 19
+        zoom: zoom || 15
       })
     });
-    mapInstanceRef.current = map;
+    mapRef.current = map;
 
-    // Atualizar ponto de localização
-    if (currentPosition) {
-      const locationFeature = new Feature({
-        geometry: new Point(transform(
-          [currentPosition.lng, currentPosition.lat],
-          'EPSG:4326',
-          'EPSG:3857'
-        ))
-      });
-      locationSource.addFeature(locationFeature);
-
-      // Centralizar no ponto atual
-      map.getView().setCenter(transform(
-        [currentPosition.lng, currentPosition.lat],
-        'EPSG:4326',
-        'EPSG:3857'
-      ));
-    }
-
-    // Se estiver em modo somente leitura, mostrar o polígono salvo
-    if (readOnly && polygonCoordinates) {
-      try {
-        console.log('Tentando desenhar polígono com coordenadas:', polygonCoordinates);
-        
-        // Garantir que as coordenadas estão no formato correto
-        let coords;
-        if (typeof polygonCoordinates === 'string') {
-          coords = JSON.parse(polygonCoordinates);
-        } else {
-          coords = polygonCoordinates;
-        }
-
-        if (Array.isArray(coords)) {
-          const transformedCoords = coords.map(coord => {
-            if (Array.isArray(coord) && coord.length >= 2) {
-              return transform([coord[0], coord[1]], 'EPSG:4326', 'EPSG:3857');
-            }
-            return null;
-          }).filter(coord => coord !== null);
-
-          if (transformedCoords.length >= 3) {
-            const polygon = new Feature({
-              geometry: new Polygon([transformedCoords])
-            });
-            
-            polygon.setStyle(new Style({
-              fill: new Fill({
-                color: 'rgba(66, 135, 245, 0.3)'
-              }),
-              stroke: new Stroke({
-                color: '#4287f5',
-                width: 3
-              })
-            }));
-
-            vectorSource.addFeature(polygon);
-
-            // Centralizar no polígono
-            const extent = polygon.getGeometry().getExtent();
-            map.getView().fit(extent, {
-              padding: [50, 50, 50, 50],
-              maxZoom: 19,
-              duration: 1000
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao processar coordenadas do polígono:', error);
-      }
-    } else if (!readOnly) {
-      // Modo de edição - permitir desenho do polígono
+    // Adicionar interação de desenho se não for somente leitura
+    if (!readOnly) {
       const draw = new Draw({
         source: vectorSource,
         type: 'Polygon'
       });
 
       draw.on('drawend', (event) => {
-        const feature = event.feature;
-        const polygon = feature.getGeometry();
-        const coordinates = polygon.getCoordinates()[0].map(coord => 
+        const coords = event.feature.getGeometry().getCoordinates()[0].map(coord => 
           transform(coord, 'EPSG:3857', 'EPSG:4326')
         );
-        
-        console.log('Coordenadas desenhadas:', coordinates); // Debug
-        if (onPolygonComplete) {
-          onPolygonComplete(coordinates);
-        }
-
-        // Reiniciar o desenho automaticamente
-        setTimeout(() => {
-          map.addInteraction(draw);
-        }, 100);
+        onPolygonComplete?.(coords);
       });
 
       map.addInteraction(draw);
-      drawInteractionRef.current = draw;
+      drawRef.current = draw;
     }
 
+    // Adicionar o polígono se houver coordenadas
+    if (polygonCoordinates && polygonCoordinates.length > 0) {
+      const coords = polygonCoordinates.map(coord => 
+        fromLonLat([coord[0], coord[1]])
+      );
+      
+      const polygonFeature = new Feature({
+        geometry: new Polygon([coords])
+      });
+
+      vectorSource.addFeature(polygonFeature);
+
+      // Centralizar o mapa no polígono
+      const extent = polygonFeature.getGeometry().getExtent();
+      map.getView().fit(extent, {
+        padding: [50, 50, 50, 50],
+        duration: 1000
+      });
+    }
+
+    // Atualizar evento de clique
+    map.on('click', async (event) => {
+      if (!readOnly && onMapClick) {
+        const coords = transform(event.coordinate, 'EPSG:3857', 'EPSG:4326');
+        const position = {
+          lng: coords[0],
+          lat: coords[1]
+        };
+        
+        onMapClick(position);
+
+        // Buscar endereço quando clicar no mapa
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}`
+          );
+          const data = await response.json();
+          if (data.display_name && onLocationSelect) {
+            onLocationSelect(data.display_name);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar endereço:', error);
+        }
+      }
+    });
+
+    // Limpar ao desmontar
     return () => {
-      map.setTarget(null);
+      if (mapRef.current) {
+        mapRef.current.setTarget(null);
+      }
     };
-  }, [currentPosition, readOnly, polygonCoordinates]);
+  }, [currentPosition, center, zoom, readOnly, polygonCoordinates]);
 
-  // Função para limpar o desenho (apenas no modo edição)
-  const clearDrawing = () => {
-    if (!readOnly && vectorSourceRef.current) {
-      vectorSourceRef.current.clear();
+  // Atualizar centro do mapa quando mudar
+  useEffect(() => {
+    if (mapRef.current && center) {
+      const view = mapRef.current.getView();
+      view.animate({
+        center: fromLonLat([center.lng, center.lat]),
+        zoom: zoom || view.getZoom(),
+        duration: 500
+      });
     }
-  };
+  }, [center, zoom]);
 
   return (
-    <>
+    <div className="relative">
+      <div 
+        ref={mapElement}
+        className="h-[400px] w-full rounded-lg overflow-hidden"
+      />
       {!readOnly && (
-        <div className="bg-gray-50 p-2 border-b border-gray-200 flex justify-end">
+        <div className="absolute bottom-4 right-4 z-10">
           <button
             type="button"
-            onClick={clearDrawing}
-            className="px-3 py-1 rounded text-sm bg-red-500 text-white hover:bg-red-600"
+            onClick={() => {
+              if (vectorSourceRef.current) {
+                vectorSourceRef.current.clear();
+              }
+            }}
+            className="px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 transition-colors"
           >
             Limpar Área
           </button>
         </div>
       )}
-      
-      <div 
-        ref={mapRef} 
-        style={{ height: readOnly ? '300px' : '400px' }}
-        className="w-full"
-      />
-    </>
+    </div>
   );
 }
 

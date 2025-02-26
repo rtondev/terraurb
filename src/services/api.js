@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   // Use environment variable for API URL with fallback
-  baseURL: 'https://api.terraurb.com',
+  baseURL: 'http://localhost:3000',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
