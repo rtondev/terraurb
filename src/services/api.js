@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   // Use environment variable for API URL with fallback
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  baseURL: 'https://api.terraurb.com',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
