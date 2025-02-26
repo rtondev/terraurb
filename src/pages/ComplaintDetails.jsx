@@ -4,6 +4,7 @@ import { MapPin, Clock, Tag, ChevronLeft, User, FileText, Home } from 'lucide-re
 import Layout from '../components/Layout';
 import api from '../services/api';
 import MapComponents from '../components/MapComponents';
+import { getStatusColor } from '../utils/statusColors';
 
 function ComplaintDetails() {
   const { id } = useParams();
@@ -17,20 +18,50 @@ function ComplaintDetails() {
     const loadComplaint = async () => {
       try {
         const response = await api.get(`/api/complaints/${id}`);
-        console.log('Dados da denúncia recebidos:', response.data);
+        console.log('Dados da denúncia:', response.data);
         
-        if (response.data.polygonCoordinates) {
-          console.log('Coordenadas do polígono:', response.data.polygonCoordinates);
-        }
+        // Parse polygon coordinates if they are stored as a string
+        const polygonCoordinates = typeof response.data.polygonCoordinates === 'string' 
+          ? JSON.parse(response.data.polygonCoordinates)
+          : response.data.polygonCoordinates;
 
-        setComplaint(response.data);
+        console.log('Coordenadas do polígono:', polygonCoordinates);
+        
+        // Update complaint data with parsed coordinates
+        setComplaint({
+          ...response.data,
+          polygonCoordinates
+        });
 
-        // Se houver coordenadas do polígono, centralizar o mapa no primeiro ponto
-        if (response.data.polygonCoordinates?.length > 0) {
-          setMapCenter({
-            lng: response.data.polygonCoordinates[0][0],
-            lat: response.data.polygonCoordinates[0][1]
+        // Se houver coordenadas do polígono, centralizar o mapa no centro do polígono
+        if (polygonCoordinates && Array.isArray(polygonCoordinates) && polygonCoordinates.length > 0) {
+          console.log('Processando coordenadas para centro do mapa:', polygonCoordinates);
+          // Calcular o centro do polígono
+          const bounds = polygonCoordinates.reduce((acc, coord) => {
+            if (Array.isArray(coord) && coord.length >= 2) {
+              return {
+                minLng: Math.min(acc.minLng, coord[0]),
+                maxLng: Math.max(acc.maxLng, coord[0]),
+                minLat: Math.min(acc.minLat, coord[1]),
+                maxLat: Math.max(acc.maxLat, coord[1])
+              };
+            }
+            return acc;
+          }, {
+            minLng: Infinity,
+            maxLng: -Infinity,
+            minLat: Infinity,
+            maxLat: -Infinity
           });
+
+          if (bounds.minLng !== Infinity && bounds.maxLng !== -Infinity) {
+            const center = {
+              lng: (bounds.minLng + bounds.maxLng) / 2,
+              lat: (bounds.minLat + bounds.maxLat) / 2
+            };
+            console.log('Centro calculado do mapa:', center);
+            setMapCenter(center);
+          }
         }
       } catch (error) {
         setError('Erro ao carregar denúncia');
@@ -85,6 +116,11 @@ function ComplaintDetails() {
           <div className="p-6 text-center text-red-500">{error}</div>
         ) : complaint && (
           <div className="p-6">
+            {/* Título da denúncia */}
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">
+              {complaint.title}
+            </h1>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Informações Principais */}
               <div>
@@ -112,8 +148,11 @@ function ComplaintDetails() {
                   <span className={`px-4 py-2 rounded-full text-sm font-medium
                     ${complaint.status === 'Resolvido' ? 'bg-green-100 text-green-800' : 
                     complaint.status === 'Em Andamento' ? 'bg-yellow-100 text-yellow-800' : 
+                    complaint.status === 'Cancelado' ? 'bg-red-100 text-red-800' :
+                    complaint.status === 'Em Verificação' ? 'bg-purple-100 text-purple-800' :
+                    complaint.status === 'Reaberto' ? 'bg-orange-100 text-orange-800' :
                     'bg-blue-100 text-blue-800'}`}>
-                    {complaint.status}
+                    {complaint.status || 'Em Análise'}
                   </span>
                 </div>
 
@@ -167,8 +206,15 @@ function ComplaintDetails() {
                       readOnly={true}
                       center={mapCenter}
                       zoom={18}
+                      statusColor={getStatusColor(complaint?.status)}
                     />
                   </div>
+                  {/* Adicionar informação sobre a área */}
+                  {complaint?.polygonCoordinates && (
+                    <p className="mt-2 text-sm text-gray-500">
+                      Área demarcada com {complaint.polygonCoordinates.length} pontos
+                    </p>
+                  )}
                 </div>
 
                 {complaint.ComplaintLogs && complaint.ComplaintLogs.length > 0 && (
@@ -211,4 +257,4 @@ function ComplaintDetails() {
   );
 }
 
-export default ComplaintDetails; 
+export default ComplaintDetails;

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import api from '../services/api';
-import { User, MoreVertical, UserPlus } from 'lucide-react';
+import { User, Trash2, Shield, ShieldOff } from 'lucide-react';
 
 function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadUsers();
@@ -18,6 +19,7 @@ function Users() {
       setUsers(response.data);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
+      setError('Erro ao carregar usuários');
     } finally {
       setLoading(false);
     }
@@ -27,10 +29,23 @@ function Users() {
     if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
       try {
         await api.delete(`/api/admin/users/${id}`);
-        loadUsers();
+        loadUsers(); // Recarrega a lista após deletar
       } catch (error) {
         console.error('Erro ao excluir usuário:', error);
+        setError('Erro ao excluir usuário');
       }
+    }
+  };
+
+  const handleToggleAdmin = async (user) => {
+    try {
+      await api.patch(`/api/admin/users/${user.id}/role`, {
+        role: user.role === 'admin' ? 'user' : 'admin'
+      });
+      loadUsers(); // Recarrega a lista após atualizar
+    } catch (error) {
+      console.error('Erro ao alterar permissão:', error);
+      setError('Erro ao alterar permissão do usuário');
     }
   };
 
@@ -44,11 +59,7 @@ function Users() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-semibold text-gray-800">Members</h1>
-          <button className="bg-indigo-600 text-white px-4 py-2 rounded-md flex items-center gap-2 hover:bg-indigo-700 transition-colors">
-            <UserPlus size={20} />
-            <span>Invite member(s)</span>
-          </button>
+          <h1 className="text-2xl font-semibold text-gray-800">Participantes</h1>
         </div>
 
         {/* Search Bar */}
@@ -56,18 +67,25 @@ function Users() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Search by name..."
+              placeholder="Procurar por nome ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 text-red-500 rounded-lg">
+            {error}
+          </div>
+        )}
+
         {/* Users List */}
         <div className="bg-white rounded-lg shadow">
           {loading ? (
-            <div className="p-4 text-center text-gray-500">Loading...</div>
+            <div className="p-4 text-center text-gray-500">Carregando...</div>
           ) : (
             <div className="divide-y divide-gray-100">
               {filteredUsers.map((user) => (
@@ -88,16 +106,33 @@ function Users() {
                       <h3 className="font-medium text-gray-900">{user.nickname}</h3>
                       <p className="text-sm text-gray-500">{user.email}</p>
                     </div>
-                    {user.role === 'admin' && (
-                      <span className="ml-2 px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
-                        Owner
-                      </span>
-                    )}
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <button className="p-1 hover:bg-gray-100 rounded-full">
-                      <MoreVertical className="w-5 h-5 text-gray-400" />
+                  <div className="flex items-center gap-4">
+                    {/* Toggle Admin Button */}
+                    <button
+                      onClick={() => handleToggleAdmin(user)}
+                      className={`p-2 rounded-lg transition-colors ${
+                        user.role === 'admin' 
+                          ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title={user.role === 'admin' ? 'Remover admin' : 'Tornar admin'}
+                    >
+                      {user.role === 'admin' ? (
+                        <Shield className="w-5 h-5" />
+                      ) : (
+                        <ShieldOff className="w-5 h-5" />
+                      )}
+                    </button>
+
+                    {/* Delete User Button */}
+                    <button
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Excluir usuário"
+                    >
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>

@@ -26,7 +26,8 @@ function MapComponents({
   zoom,
   onMapClick,
   onLocationSelect,
-  polygonCoordinates
+  polygonCoordinates,
+  statusColor,
 }) {
   const mapElement = useRef(null);
   const mapRef = useRef(null);
@@ -40,18 +41,21 @@ function MapComponents({
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
 
+    // Estilo para o polígono
+    const polygonStyle = new Style({
+      fill: new Fill({
+        color: statusColor ? statusColor.replace('#', 'rgba(').concat(', 0.4)') : 'rgba(66, 135, 245, 0.4)'
+      }),
+      stroke: new Stroke({
+        color: statusColor || '#4287f5',
+        width: 3
+      })
+    });
+
     // Criar camadas
     const vectorLayer = new VectorLayer({
       source: vectorSource,
-      style: new Style({
-        fill: new Fill({
-          color: 'rgba(66, 135, 245, 0.2)'
-        }),
-        stroke: new Stroke({
-          color: '#4287f5',
-          width: 2
-        })
-      })
+      style: polygonStyle
     });
 
     const baseLayer = new TileLayer({
@@ -94,23 +98,34 @@ function MapComponents({
     }
 
     // Adicionar o polígono se houver coordenadas
-    if (polygonCoordinates && polygonCoordinates.length > 0) {
-      const coords = polygonCoordinates.map(coord => 
-        fromLonLat([coord[0], coord[1]])
-      );
+    if (polygonCoordinates && Array.isArray(polygonCoordinates) && polygonCoordinates.length > 0) {
+      console.log('Adicionando polígono com coordenadas:', polygonCoordinates);
       
-      const polygonFeature = new Feature({
-        geometry: new Polygon([coords])
-      });
+      // Converter coordenadas para o formato do OpenLayers e fechar o polígono
+      const coords = polygonCoordinates.map(coord => 
+        Array.isArray(coord) && coord.length >= 2 ? fromLonLat([coord[0], coord[1]]) : null
+      ).filter(coord => coord !== null);
+      
+      // Adicionar o primeiro ponto novamente para fechar o polígono
+      if (coords.length > 0) {
+        coords.push(coords[0]);
+        
+        // Criar feature do polígono
+        const polygonFeature = new Feature({
+          geometry: new Polygon([coords])
+        });
 
-      vectorSource.addFeature(polygonFeature);
+        // Adicionar ao mapa
+        vectorSource.addFeature(polygonFeature);
 
-      // Centralizar o mapa no polígono
-      const extent = polygonFeature.getGeometry().getExtent();
-      map.getView().fit(extent, {
-        padding: [50, 50, 50, 50],
-        duration: 1000
-      });
+        // Ajustar visualização para mostrar todo o polígono
+        const extent = polygonFeature.getGeometry().getExtent();
+        map.getView().fit(extent, {
+          padding: [50, 50, 50, 50],
+          duration: 1000,
+          maxZoom: 19
+        });
+      }
     }
 
     // Atualizar evento de clique
@@ -184,4 +199,4 @@ function MapComponents({
   );
 }
 
-export default MapComponents; 
+export default MapComponents;

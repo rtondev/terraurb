@@ -81,7 +81,11 @@ function Complaints() {
                     <span className={`px-3 py-1 rounded-full text-sm font-medium
                       ${complaint.status === 'Resolvido' ? 'bg-green-100 text-green-800' : 
                       complaint.status === 'Em Andamento' ? 'bg-yellow-100 text-yellow-800' : 
-                      'bg-blue-100 text-blue-800'}`}>
+                      complaint.status === 'Cancelado' ? 'bg-red-100 text-red-800' :
+                      complaint.status === 'Em Verificação' ? 'bg-purple-100 text-purple-800' :
+                      complaint.status === 'Reaberto' ? 'bg-orange-100 text-orange-800' :
+                      complaint.status === 'Em Análise' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'}`}>
                       {complaint.status}
                     </span>
                     <button
@@ -102,4 +106,4 @@ function Complaints() {
   );
 }
 
-export default Complaints; 
+export default Complaints;

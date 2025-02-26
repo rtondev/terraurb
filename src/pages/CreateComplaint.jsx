@@ -75,9 +75,9 @@ function CreateComplaint() {
     }
   };
 
-  const handlePolygonComplete = (coordinates) => {
-    console.log('Polígono completado:', coordinates); // Debug
-    setPolygonCoordinates(coordinates);
+  const handlePolygonComplete = (coords) => {
+    console.log('Polígono desenhado:', coords);
+    setPolygonCoordinates(coords);
   };
 
   const handleSubmit = async (e) => {
@@ -85,23 +85,26 @@ function CreateComplaint() {
     setError('');
     setLoading(true);
 
-    const data = {
-      title,
-      description,
-      location,
-      tagIds: selectedTags,
-      polygonCoordinates
-    };
-
-    console.log('Enviando dados:', data);
-
     try {
-      const response = await api.post('/api/complaints', data);
-      console.log('Resposta:', response.data);
+      if (!polygonCoordinates || polygonCoordinates.length === 0) {
+        throw new Error('Por favor, desenhe a área do terreno no mapa');
+      }
+
+      const response = await api.post('/api/complaints', {
+        title,
+        description,
+        location,
+        tagIds: selectedTags,
+        polygonCoordinates,
+        status: 'Em Análise' // Default status for all new complaints
+      });
+
+      console.log('Denúncia criada:', response.data);
       navigate('/denuncias');
     } catch (error) {
-      console.error('Erro completo:', error);
-      setError(error.response?.data?.message || 'Erro ao criar denúncia');
+      console.error('Erro ao criar denúncia:', error);
+      setError(error.message || 'Erro ao criar denúncia');
+    } finally {
       setLoading(false);
     }
   };
@@ -224,7 +227,7 @@ function CreateComplaint() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Localização
+                Localização e Área do Terreno
               </label>
               <div className="space-y-3">
                 <div className="relative">
@@ -279,7 +282,7 @@ function CreateComplaint() {
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <Suspense fallback={
-                    <div className="h-[300px] flex items-center justify-center bg-gray-50">
+                    <div className="h-[400px] flex items-center justify-center bg-gray-50">
                       <div className="text-gray-500">Carregando mapa...</div>
                     </div>
                   }>
@@ -302,6 +305,11 @@ function CreateComplaint() {
                     />
                   </Suspense>
                 </div>
+                {polygonCoordinates && (
+                  <p className="mt-2 text-sm text-gray-500">
+                    Área demarcada com {polygonCoordinates.length} pontos
+                  </p>
+                )}
               </div>
             </div>
 
@@ -359,4 +367,4 @@ function CreateComplaint() {
   );
 }
 
-export default CreateComplaint; 
+export default CreateComplaint;
