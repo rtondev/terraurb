@@ -212,6 +212,11 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Título, descrição e localização são obrigatórios' });
     }
 
+    // Validar se recebeu as coordenadas do polígono
+    if (!polygonCoordinates || !Array.isArray(polygonCoordinates) || polygonCoordinates.length < 3) {
+      return res.status(400).json({ error: 'Coordenadas do polígono inválidas' });
+    }
+
     console.log('Recebendo dados da denúncia:', {
       title,
       description,
@@ -224,11 +229,12 @@ router.post('/', authenticateToken, async (req, res) => {
       title,
       description,
       location,
-      polygonCoordinates,
-      userId: req.user.id
+      status: 'Em Análise',
+      userId: req.user.id,
+      polygonCoordinates
     });
 
-    console.log('Denúncia criada:', complaint.toJSON());
+    console.log('Denúncia criada com polígono:', complaint.polygonCoordinates);
 
     if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
       await complaint.setTags(tagIds);

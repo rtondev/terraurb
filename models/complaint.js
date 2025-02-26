@@ -20,8 +20,12 @@ const Complaint = sequelize.define('Complaint', {
     allowNull: false
   },
   status: {
-    type: DataTypes.ENUM('pending', 'in_progress', 'resolved', 'rejected'),
-    defaultValue: 'pending'
+    type: DataTypes.ENUM('Em Análise', 'Em Andamento', 'Resolvido', 'Cancelado', 'Em Verificação', 'Reaberto'),
+    allowNull: false,
+    defaultValue: 'Em Análise',
+    validate: {
+      isIn: [['Em Análise', 'Em Andamento', 'Resolvido', 'Cancelado', 'Em Verificação', 'Reaberto']]
+    }
   },
   images: {
     type: DataTypes.JSON,
@@ -33,6 +37,17 @@ const Complaint = sequelize.define('Complaint', {
     references: {
       model: 'User',
       key: 'id'
+    }
+  },
+  polygonCoordinates: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    validate: {
+      isValidPolygon(value) {
+        if (value && (!Array.isArray(value) || value.length < 3)) {
+          throw new Error('Polígono deve ter pelo menos 3 pontos');
+        }
+      }
     }
   }
 });

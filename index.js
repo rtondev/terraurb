@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 require('dotenv').config();
-const { syncDatabase } = require('./models');
+const { sequelize } = require('./models/db');  // Add this import
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
@@ -54,8 +54,9 @@ const PORT = process.env.PORT || 3000;
 // Função assíncrona para inicializar o servidor
 const initializeServer = async () => {
   try {
-    await syncDatabase();
-    console.log('Database synchronized');
+    // Replace syncDatabase() with direct sequelize sync
+    await sequelize.sync({ alter: true });
+    console.log('Database tables updated automatically');
     
     await createDefaultAdmin();
     console.log('Default admin user setup completed');
