@@ -6,6 +6,7 @@ const { Complaint, ComplaintLog } = require('./complaint');
 const { Comment } = require('./comment');
 const { Report } = require('./report');
 const { Tag } = require('./tag');
+const { VerificationCode } = require('./verificationCode');
 
 // Definir o modelo de junção ComplaintTags
 const ComplaintTags = sequelize.define('ComplaintTags', {
@@ -62,7 +63,7 @@ User.hasMany(Complaint, {
 
 Complaint.belongsTo(User, {
   foreignKey: 'userId',
-  as: 'user',
+  as: 'author',
   onDelete: 'CASCADE'
 });
 
@@ -132,11 +133,21 @@ const syncDatabase = async () => {
     await sequelize.authenticate();
     console.log('Conexão com o banco de dados estabelecida com sucesso.');
     
-    // Dropar a tabela ComplaintTags se existir
-    await sequelize.query('DROP TABLE IF EXISTS ComplaintTags');
+    // Desabilitar temporariamente as chaves estrangeiras
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
     
-    // Sincronizar modelos
-    await sequelize.sync({ alter: true });
+    // Dropar tabelas na ordem correta
+    await sequelize.query('DROP TABLE IF EXISTS ComplaintTags');
+    await sequelize.query('DROP TABLE IF EXISTS VerificationCodes');
+    
+    // Sincronizar modelos sem alterar tabelas existentes
+    await sequelize.sync({ 
+      force: false, // Não força recriação das tabelas
+      alter: false  // Não altera tabelas existentes
+    });
+    
+    // Reabilitar as chaves estrangeiras
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
     
     console.log('Modelos sincronizados com o banco de dados.');
   } catch (error) {
@@ -156,5 +167,6 @@ module.exports = {
   Report,
   Tag,
   ComplaintTags,
+  VerificationCode,
   syncDatabase
 }; 

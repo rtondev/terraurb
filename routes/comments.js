@@ -1,48 +1,96 @@
 const express = require('express');
 const router = express.Router();
-const { Comment } = require('../models/comment');
-const { authenticateToken } = require('./auth');
+const { Comment, User } = require('../models');
+const { authenticateToken } = require('../middleware/auth');
 
-// Create a new comment
-router.post('/:complaintId', authenticateToken, async (req, res) => {
+// Criar novo comentário
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { content } = req.body;
-    const { complaintId } = req.params;
-
-    if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
-    }
-
+    const { complaintId, content } = req.body;
+    
     const comment = await Comment.create({
-      content,
+      complaintId,
       userId: req.user.id,
-      complaintId
+      content
     });
 
-    const commentWithAuthor = await Comment.findByPk(comment.id, {
-      include: [{ association: 'author', attributes: ['nickname'] }]
+    // Carregar o comentário com os dados do usuário
+    const commentWithUser = await Comment.findByPk(comment.id, {
+      include: [{
+        model: User,
+        as: 'author',
+        attributes: ['id', 'nickname']
+      }]
     });
 
-    res.status(201).json(commentWithAuthor);
+    res.status(201).json(commentWithUser);
   } catch (error) {
-    res.status(500).json({ error: 'Error creating comment' });
+    console.error('Erro ao criar comentário:', error);
+    res.status(500).json({ error: 'Erro ao criar comentário' });
   }
 });
 
-// Get all comments for a complaint
-router.get('/:complaintId', authenticateToken, async (req, res) => {
+// Listar comentários de uma denúncia
+router.get('/complaint/:complaintId', authenticateToken, async (req, res) => {
   try {
-    const { complaintId } = req.params;
-
     const comments = await Comment.findAll({
-      where: { complaintId },
-      include: [{ association: 'author', attributes: ['nickname'] }],
+      where: { complaintId: req.params.complaintId },
+      include: [{
+        model: User,
+        as: 'author',
+        attributes: ['id', 'nickname']
+      }],
       order: [['createdAt', 'DESC']]
     });
-
+    
     res.json(comments);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching comments' });
+    console.error('Erro ao listar comentários:', error);
+    res.status(500).json({ error: 'Erro ao listar comentários' });
+  }
+});
+
+// Atualizar comentário
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const comment = await Comment.findByPk(req.params.id);
+    
+    if (!comment) {
+      return res.status(404).json({ error: 'Comentário não encontrado' });
+    }
+
+    if (comment.userId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Sem permissão para editar este comentário' });
+    }
+
+    const { content } = req.body;
+    await comment.update({ content });
+
+    res.json(comment);
+  } catch (error) {
+    console.error('Erro ao atualizar comentário:', error);
+    res.status(500).json({ error: 'Erro ao atualizar comentário' });
+  }
+});
+
+// Deletar comentário
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const comment = await Comment.findByPk(req.params.id);
+    
+    if (!comment) {
+      return res.status(404).json({ error: 'Comentário não encontrado' });
+    }
+
+    if (comment.userId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Sem permissão para deletar este comentário' });
+    }
+
+    await comment.destroy();
+    res.status(204).send();
+  } catch (error) {
+    console.error('Erro ao deletar comentário:', error);
+    res.status(500).json({ error: 'Erro ao deletar comentário' });
   }
 });
 

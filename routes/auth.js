@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { User, Session, ActivityLog, Complaint } = require('../models');
+const { User, Session, ActivityLog, Complaint, VerificationCode } = require('../models');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 const { verificationEmailTemplate } = require('../utils/emailTemplates');
@@ -9,43 +9,8 @@ const cloudinary = require('../config/cloudinary');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 const streamifier = require('streamifier');
-
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-  try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido' });
-    }
-
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
-        console.error('Erro ao verificar token:', err);
-        return res.status(403).json({ 
-          error: 'Token inválido ou expirado',
-          details: err.message 
-        });
-      }
-
-      try {
-        const user = await User.findByPk(decoded.id);
-        if (!user) {
-          return res.status(404).json({ error: 'Usuário não encontrado' });
-        }
-        req.user = user;
-        next();
-      } catch (error) {
-        console.error('Erro ao buscar usuário:', error);
-        return res.status(500).json({ error: 'Erro interno do servidor' });
-      }
-    });
-  } catch (error) {
-    console.error('Erro no middleware de autenticação:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-};
+const { authenticateToken } = require('../middleware/auth');
+const { Op } = require('sequelize');
 
 // Configurar o transporter do Nodemailer para Gmail
 const transporter = nodemailer.createTransport({
@@ -76,120 +41,154 @@ router.post('/send-verification-code', async (req, res) => {
   try {
     const { email } = req.body;
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    console.log('Enviando código:', { email, verificationCode });
 
-    console.log('Tentando enviar email para:', email);
-    console.log('Usando credenciais:', {
-      user: process.env.SMTP_USER,
-      // Não logar a senha real
-      passLength: process.env.SMTP_PASS?.length
+    // Criar ou atualizar código de verificação
+    await VerificationCode.create({
+      email,
+      code: verificationCode,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutos
     });
 
-    // Verificar se email já existe
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email já cadastrado' });
-    }
+    // Enviar email
+    await transporter.sendMail({
+      from: `"TerraUrb" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: 'Código de Verificação - TerraUrb',
+      html: verificationEmailTemplate(verificationCode)
+    });
 
-    // Enviar email com tratamento de erro mais detalhado
-    try {
-      const info = await transporter.sendMail({
-        from: `"TerraUrb" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: 'Código de Verificação - TerraUrb',
-        html: verificationEmailTemplate(verificationCode)
-      });
-
-      console.log('Email enviado:', info);
-
-      // Salvar o código
-      verificationCodes.set(email, {
-        code: verificationCode,
-        timestamp: Date.now(),
-        attempts: 0
-      });
-
-      res.json({ success: true, message: 'Código enviado com sucesso' });
-    } catch (emailError) {
-      console.error('Erro detalhado ao enviar email:', emailError);
-      return res.status(500).json({ 
-        error: 'Erro ao enviar email de verificação',
-        details: emailError.message
-      });
-    }
+    console.log('Código salvo e email enviado');
+    res.json({ success: true });
   } catch (error) {
-    console.error('Erro ao processar solicitação:', error);
-    res.status(500).json({ 
-      error: 'Erro ao processar solicitação',
-      details: error.message
-    });
+    console.error('Erro ao enviar código:', error);
+    res.status(500).json({ error: 'Erro ao enviar código de verificação' });
   }
 });
 
-// Verificar código
+// Rota para verificar código
 router.post('/verify-code', async (req, res) => {
   try {
-    const { email, code, nickname, password } = req.body;
+    const { email, code, nickname } = req.body;
+    console.log('Verificando código:', { email, code, nickname });
 
-    const storedData = verificationCodes.get(email);
-    if (!storedData) {
-      return res.status(400).json({ error: 'Código expirado ou inválido' });
+    if (!email || !code) {
+      return res.status(400).json({ 
+        error: 'Email e código são obrigatórios' 
+      });
     }
 
-    if (Date.now() > storedData.expiresAt) {
-      verificationCodes.delete(email);
-      return res.status(400).json({ error: 'Código expirado' });
+    // Buscar código de verificação
+    const verificationData = await VerificationCode.findOne({
+      where: {
+        email,
+        code,
+        expiresAt: {
+          [Op.gt]: new Date()
+        }
+      }
+    });
+    console.log('Verificação encontrada:', verificationData);
+
+    if (!verificationData) {
+      return res.status(400).json({ 
+        error: 'Código inválido ou expirado' 
+      });
     }
 
-    if (storedData.code !== code) {
-      return res.status(400).json({ error: 'Código incorreto' });
+    // Verificar se email ou nickname já existem
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [{ email }, { nickname }]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: 'Email ou nickname já cadastrado' 
+      });
     }
 
-    // Armazenar dados de registro
-    storedData.verified = true;
-    storedData.registrationData = {
-      nickname,
-      password
-    };
-    verificationCodes.set(email, storedData);
+    res.json({ 
+      verified: true,
+      message: 'Código verificado com sucesso'
+    });
 
-    res.json({ verified: true });
   } catch (error) {
     console.error('Erro ao verificar código:', error);
-    res.status(500).json({ error: 'Erro ao verificar código' });
+    res.status(500).json({ 
+      error: 'Erro ao verificar código' 
+    });
   }
 });
 
-// Register route
+// Rota de registro
 router.post('/register', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { nickname, email, password, verificationCode } = req.body;
 
-    // Verificar se o email foi verificado
-    const storedData = verificationCodes.get(email);
-    if (!storedData?.verified || !storedData?.registrationData) {
-      return res.status(400).json({ error: 'Email não verificado' });
+    // Validar dados obrigatórios
+    if (!nickname || !email || !password || !verificationCode) {
+      return res.status(400).json({ 
+        error: 'Todos os campos são obrigatórios' 
+      });
     }
 
-    const { nickname, password } = storedData.registrationData;
+    // Verificar se o código é válido
+    const verification = await VerificationCode.findOne({
+      where: {
+        email,
+        code: verificationCode,
+        expiresAt: {
+          [Op.gt]: new Date()
+        }
+      }
+    });
+
+    if (!verification) {
+      return res.status(400).json({ 
+        error: 'Código de verificação inválido ou expirado' 
+      });
+    }
+
+    // Verificar se usuário já existe
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [{ email }, { nickname }]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: 'Email ou nickname já cadastrado' 
+      });
+    }
+
+    // Criar hash da senha
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Criar usuário
-    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({
       nickname,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      role: 'user'
     });
 
-    // Limpar dados de verificação
-    verificationCodes.delete(email);
+    // Remover código de verificação usado
+    await verification.destroy();
 
-    res.status(201).json({ message: 'Usuário registrado com sucesso' });
+    res.status(201).json({ 
+      success: true,
+      message: 'Usuário criado com sucesso'
+    });
+
   } catch (error) {
     console.error('Erro no registro:', error);
-    if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(400).json({ error: 'Email ou nickname já existe' });
-    }
-    res.status(500).json({ error: 'Erro ao registrar usuário' });
+    res.status(500).json({ 
+      error: 'Erro interno ao criar usuário' 
+    });
   }
 });
 
@@ -324,89 +323,63 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Update profile route
+// Rota para atualizar perfil
 router.put('/me', authenticateToken, async (req, res) => {
   try {
-    const { fullName, city, state, age, phone, bio } = req.body;
-    
-    const user = await User.findByPk(req.user.id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
+    const { nickname, fullName, city, state, phone, bio } = req.body;
+    const userId = req.user.id;
 
-    // Validação da idade
-    if (age !== null && age !== undefined && age !== '') {
-      const ageNum = parseInt(age);
-      if (isNaN(ageNum)) {
+    // Validar nickname
+    if (nickname && nickname !== req.user.nickname) {
+      // Verificar se o nickname já existe
+      const existingUser = await User.findOne({ 
+        where: { 
+          nickname,
+          id: { [Op.ne]: userId } // Excluir o usuário atual da busca
+        } 
+      });
+
+      if (existingUser) {
         return res.status(400).json({ 
-          error: 'Idade inválida',
-          details: 'A idade deve ser um número'
-        });
-      }
-      if (ageNum > 120) {
-        return res.status(400).json({ 
-          error: 'Idade inválida',
-          details: 'A idade máxima é 120 anos'
+          error: 'Nome de usuário já está em uso' 
         });
       }
     }
 
-    // Preparar dados para atualização
-    const updateData = {
-      fullName: fullName || null,
-      city: city || null,
-      state: state || null,
-      age: age ? parseInt(age) : null,
-      phone: phone || null,
-      bio: bio || null
-    };
+    // Atualizar usuário
+    await User.update({
+      nickname: nickname || req.user.nickname,
+      fullName: fullName || req.user.fullName,
+      city: city || req.user.city,
+      state: state || req.user.state,
+      phone: phone || req.user.phone,
+      bio: bio || req.user.bio
+    }, {
+      where: { id: userId }
+    });
 
-    await user.update(updateData);
-    
-    // Registrar a atualização
-    await logActivity(
-      req.user.id,
-      'profile',
-      'Perfil atualizado',
-      req.session?.deviceInfo // Se disponível
-    );
+    res.json({ 
+      success: true,
+      message: 'Perfil atualizado com sucesso'
+    });
 
-    // Retornar usuário atualizado sem a senha
-    const { password, ...userWithoutPassword } = user.toJSON();
-    res.json(userWithoutPassword);
   } catch (error) {
     console.error('Erro ao atualizar perfil:', error);
-    
-    if (error.name === 'SequelizeValidationError') {
-      return res.status(400).json({
-        error: 'Erro de validação',
-        details: error.errors.map(err => ({
-          field: err.path,
-          message: err.message
-        }))
-      });
-    }
-
     res.status(500).json({ 
-      error: 'Erro ao atualizar perfil',
-      message: 'Ocorreu um erro ao tentar atualizar o perfil'
+      error: 'Erro ao atualizar perfil' 
     });
   }
 });
 
 // Check nickname availability
-router.get('/check-nickname/:nickname', authenticateToken, async (req, res) => {
+router.get('/check-nickname/:nickname', async (req, res) => {
   try {
     const { nickname } = req.params;
-    if (nickname === req.user.nickname) {
-      return res.json({ available: true });
-    }
-    
-    const existingUser = await User.findOne({ where: { nickname } });
-    res.json({ available: !existingUser });
+    const user = await User.findOne({ where: { nickname } });
+    res.json({ available: !user });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao verificar nickname' });
+    console.error('Erro ao verificar nickname:', error);
+    res.status(500).json({ error: 'Erro ao verificar disponibilidade do nickname' });
   }
 });
 
@@ -687,4 +660,4 @@ router.get('/profile/:nickname', async (req, res) => {
   }
 });
 
-module.exports = { router, authenticateToken };
+module.exports = router;

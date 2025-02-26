@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { Complaint, ComplaintLog } = require('../models/complaint');
-const { Tag } = require('../models/tag');
-const { authenticateToken } = require('./auth');
-const { User } = require('../models/db');
+const { Complaint, ComplaintLog, User, Tag } = require('../models');
+const { authenticateToken } = require('../middleware/auth');
 
 // Middleware to check if user is authorized to change complaint status
 const canChangeStatus = (req, res, next) => {
@@ -13,18 +11,42 @@ const canChangeStatus = (req, res, next) => {
   next();
 };
 
+// Middleware para verificar se o usuário pode alterar a denúncia
+const canModifyComplaint = async (req, res, next) => {
+  try {
+    const complaint = await Complaint.findByPk(req.params.id);
+    if (!complaint) {
+      return res.status(404).json({ error: 'Denúncia não encontrada' });
+    }
+    
+    if (req.user.role === 'admin' || complaint.userId === req.user.id) {
+      req.complaint = complaint;
+      next();
+    } else {
+      res.status(403).json({ error: 'Sem permissão para modificar esta denúncia' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao verificar permissões' });
+  }
+};
+
 // Get my complaints (deve vir ANTES das rotas com parâmetros)
 router.get('/my', authenticateToken, async (req, res) => {
   try {
+    console.log('Usuário autenticado:', req.user.id);
+    
     const complaints = await Complaint.findAll({
       where: { userId: req.user.id },
       include: [
-        { model: Tag },
-        { association: 'author', attributes: ['nickname'] },
-        { 
-          model: ComplaintLog,
-          include: [{ association: 'changedBy', attributes: ['nickname'] }],
-          order: [['createdAt', 'DESC']]
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'nickname', 'email']
+        },
+        {
+          model: Tag,
+          through: { attributes: [] },
+          attributes: ['id', 'name']
         }
       ],
       order: [['createdAt', 'DESC']]
@@ -49,17 +71,22 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const complaints = await Complaint.findAll({
       include: [
-        { association: 'author', attributes: ['nickname'] },
-        { 
-          model: ComplaintLog,
-          include: [{ association: 'changedBy', attributes: ['nickname'] }]
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'nickname']
         },
-        { model: Tag }
-      ]
+        {
+          model: Tag,
+          through: { attributes: [] }
+        }
+      ],
+      order: [['createdAt', 'DESC']]
     });
     res.json(complaints);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar denúncias' });
+    console.error('Erro ao listar denúncias:', error);
+    res.status(500).json({ error: 'Erro ao listar denúncias' });
   }
 });
 

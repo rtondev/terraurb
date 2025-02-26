@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const dotenv = require('dotenv');
 require('dotenv').config();
 const { syncDatabase } = require('./models');
-const { router: authRouter } = require('./routes/auth');
+const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
 const commentRoutes = require('./routes/comments');
@@ -33,7 +34,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Routes
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/comments', commentRoutes);
@@ -72,5 +73,7 @@ const initializeServer = async () => {
 
 // Iniciar o servidor
 initializeServer();
+
+module.exports = app;
 
 

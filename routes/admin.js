@@ -1,32 +1,39 @@
 const express = require('express');
-const { User } = require('../models/db');
 const router = express.Router();
+const { User } = require('../models');
+const { authenticateToken } = require('../middleware/auth');
 
-// Import middleware from auth.js
-const { authenticateToken } = require('./auth');
-
-// Middleware to check if user is admin
-const isAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Access denied. Admin only.' });
+// Middleware para verificar se o usuário é admin
+const isAdmin = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao verificar permissões' });
   }
-  next();
 };
 
-// Get all users (admin only)
-router.get('/users', authenticateToken, isAdmin, async (req, res) => {
+// Todas as rotas admin requerem autenticação e permissão de admin
+router.use(authenticateToken);
+router.use(isAdmin);
+
+// Listar todos os usuários
+router.get('/users', async (req, res) => {
   try {
     const users = await User.findAll({
       attributes: ['id', 'nickname', 'email', 'role', 'createdAt']
     });
     res.json(users);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching users' });
+    console.error('Erro ao listar usuários:', error);
+    res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
 
 // Delete user (admin only)
-router.delete('/users/:id', authenticateToken, isAdmin, async (req, res) => {
+router.delete('/users/:id', async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) {
