@@ -260,28 +260,7 @@ function GlobalMap({ complaints }) {
         style={{ zIndex: 1000 }}
       />
 
-      {/* Legenda */}
-      <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-md">
-        <h4 className="text-sm font-medium mb-2">Status</h4>
-        <div className="space-y-1">
-          {[
-            { status: 'Em Análise', color: '#4287f5' },
-            { status: 'Em Andamento', color: '#FFD700' },
-            { status: 'Em Verificação', color: '#9932CC' },
-            { status: 'Resolvido', color: '#32CD32' },
-            { status: 'Cancelado', color: '#FF0000' },
-            { status: 'Reaberto', color: '#FFA500' }
-          ].map(({ status, color }) => (
-            <div key={status} className="flex items-center gap-2">
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-xs text-gray-600">{status}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+     
     </div>
   );
 }
