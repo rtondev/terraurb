@@ -39,8 +39,20 @@ router.get('/users', async (req, res) => {
       ]
     });
 
-    console.log(`Encontrados ${users.length} usuários`); // Debug
-    res.json(users);
+    console.log('Dados dos usuários:', JSON.stringify(users, null, 2)); // Log detalhado
+    console.log(`Encontrados ${users.length} usuários`);
+    
+    // Garantir que todos os campos necessários estejam presentes
+    const sanitizedUsers = users.map(user => ({
+      id: user.id,
+      nickname: user.nickname || 'Sem nome',
+      email: user.email || 'Sem email',
+      role: user.role || 'user',
+      createdAt: user.createdAt,
+      activities: user.activities || []
+    }));
+
+    res.json(sanitizedUsers);
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
     res.status(500).json({ error: 'Erro ao listar usuários' });
