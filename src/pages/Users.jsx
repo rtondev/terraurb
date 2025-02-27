@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
 import api from '../services/api';
-import { User, Trash2, Shield, ShieldOff } from 'lucide-react';
+import Layout from '../components/Layout';
+import { Shield, ShieldAlert, Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -17,129 +17,168 @@ function Users() {
     try {
       const response = await api.get('/api/admin/users');
       setUsers(response.data);
+      setError('');
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
-      setError('Erro ao carregar usuários');
+      setError('Erro ao carregar lista de usuários');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteUser = async (id) => {
-    if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
-      try {
-        await api.delete(`/api/admin/users/${id}`);
-        loadUsers(); // Recarrega a lista após deletar
-      } catch (error) {
-        console.error('Erro ao excluir usuário:', error);
-        setError('Erro ao excluir usuário');
-      }
-    }
-  };
-
-  const handleToggleAdmin = async (user) => {
+  const handleRoleToggle = async (userId, currentRole) => {
     try {
-      await api.patch(`/api/admin/users/${user.id}/role`, {
-        role: user.role === 'admin' ? 'user' : 'admin'
+      const newRole = currentRole === 'admin' ? 'user' : 'admin';
+      
+      await api.patch(`/api/admin/users/${userId}/role`, {
+        role: newRole
       });
-      loadUsers(); // Recarrega a lista após atualizar
+
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, role: newRole } : user
+      ));
+
+      toast.success(`Permissões de ${newRole === 'admin' ? 'administrador' : 'usuário'} atualizadas com sucesso`);
     } catch (error) {
       console.error('Erro ao alterar permissão:', error);
-      setError('Erro ao alterar permissão do usuário');
+      toast.error('Erro ao alterar permissões do usuário');
     }
   };
-
-  const filteredUsers = users.filter(user => 
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.nickname.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-semibold text-gray-800">Participantes</h1>
-        </div>
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+        <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Gerenciar Usuários</h2>
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Procurar por nome ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {/* Error Message */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 text-red-500 rounded-lg">
+          <div className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-lg mb-4">
             {error}
           </div>
         )}
 
-        {/* Users List */}
-        <div className="bg-white rounded-lg shadow">
-          {loading ? (
-            <div className="p-4 text-center text-gray-500">Carregando...</div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {filteredUsers.map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-4 hover:bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    {user.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.nickname}
-                        className="w-10 h-10 rounded-full"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-gray-400" />
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow overflow-x-auto">
+            <div className="min-w-full">
+              {/* Versão para Desktop */}
+              <table className="hidden sm:table min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Usuário
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tipo
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {users.map(user => (
+                    <tr key={user.id}>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {user.nickname}
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {user.email}
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          user.role === 'admin' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.role === 'admin' ? 'Administrador' : 'Usuário'}
+                        </span>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => handleRoleToggle(user.id, user.role)}
+                          className={`inline-flex items-center px-3 py-1.5 border rounded-lg text-sm font-medium transition-colors ${
+                            user.role === 'admin'
+                              ? 'border-red-200 text-red-600 hover:bg-red-50'
+                              : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          {user.role === 'admin' ? (
+                            <>
+                              <ShieldAlert className="h-4 w-4 mr-1" />
+                              <span className="hidden sm:inline">Remover Admin</span>
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="h-4 w-4 mr-1" />
+                              <span className="hidden sm:inline">Tornar Admin</span>
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Versão para Mobile */}
+              <div className="sm:hidden divide-y divide-gray-200">
+                {users.map(user => (
+                  <div key={user.id} className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {user.nickname}
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1">
+                          {user.email}
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <h3 className="font-medium text-gray-900">{user.nickname}</h3>
-                      <p className="text-sm text-gray-500">{user.email}</p>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.role === 'admin' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {user.role === 'admin' ? 'Admin' : 'Usuário'}
+                      </span>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => handleRoleToggle(user.id, user.role)}
+                        className={`inline-flex items-center px-3 py-1.5 border rounded-lg text-sm font-medium transition-colors ${
+                          user.role === 'admin'
+                            ? 'border-red-200 text-red-600 hover:bg-red-50'
+                            : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                        }`}
+                      >
+                        {user.role === 'admin' ? (
+                          <>
+                            <ShieldAlert className="h-4 w-4 mr-1" />
+                            Remover Admin
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="h-4 w-4 mr-1" />
+                            Tornar Admin
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    {/* Toggle Admin Button */}
-                    <button
-                      onClick={() => handleToggleAdmin(user)}
-                      className={`p-2 rounded-lg transition-colors ${
-                        user.role === 'admin' 
-                          ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                      title={user.role === 'admin' ? 'Remover admin' : 'Tornar admin'}
-                    >
-                      {user.role === 'admin' ? (
-                        <Shield className="w-5 h-5" />
-                      ) : (
-                        <ShieldOff className="w-5 h-5" />
-                      )}
-                    </button>
-
-                    {/* Delete User Button */}
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Excluir usuário"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

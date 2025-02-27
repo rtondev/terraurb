@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { 
   Home, 
   User, 
@@ -7,7 +7,8 @@ import {
   AlertTriangle, 
   Map,
   Tags,
-  Settings
+  Settings,
+  Flag
 } from "lucide-react";
 import { useAuth } from '../contexts/AuthContext';
 
@@ -40,7 +41,7 @@ function Sidebar() {
   // Menu adicional apenas para administradores
   const adminMenuItems = [
     { Icon: Tags, text: "Tags", path: "/tags" },
-    { Icon: AlertTriangle, text: "Reportes", path: "/reportes" },
+    { Icon: Flag, text: "Denúncias", path: "/admin/denuncias" },
     { Icon: Users, text: "Usuários", path: "/usuarios" }
   ];
 
@@ -58,7 +59,7 @@ function Sidebar() {
       <div className="flex md:block justify-around py-1 px-2 md:p-5">
         {menuItems.map((item) => (
           <SidebarOption 
-            key={item.text} 
+            key={item.path}
             {...item} 
             active={location.pathname === item.path}
             onClick={() => navigate(item.path)}

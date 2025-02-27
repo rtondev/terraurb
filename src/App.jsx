@@ -71,7 +71,7 @@ function App() {
               <Tags />
             </AdminRoute>
           } />
-          <Route path="/reportes" element={
+          <Route path="/admin/denuncias" element={
             <AdminRoute>
               <Reports />
             </AdminRoute>

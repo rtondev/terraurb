@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Flag, AlertCircle, X } from 'lucide-react';
 import api from '../services/api';
+import { toast } from 'react-hot-toast';
 
 function ReportDialog({ onClose, onSubmit, type, loading, error }) {
   const [reason, setReason] = useState('');
@@ -97,26 +98,59 @@ function ReportDialog({ onClose, onSubmit, type, loading, error }) {
   );
 }
 
-function ReportButton({ type, targetId, userId, currentUserId }) {
-  const [showDialog, setShowDialog] = useState(false);
+function ReportButton({ type, targetId, userId, currentUserId, contentRef }) {
+  const [showModal, setShowModal] = useState(false);
+  const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [hasReported, setHasReported] = useState(false);
+
+  // Verificar se o usuário já denunciou
+  useEffect(() => {
+    const checkExistingReport = async () => {
+      try {
+        const response = await api.get(`/api/reports/check`, {
+          params: { type, targetId }
+        });
+        setHasReported(response.data.exists);
+      } catch (error) {
+        console.error('Erro ao verificar denúncia:', error);
+      }
+    };
+
+    checkExistingReport();
+  }, [type, targetId]);
 
   // Não mostrar botão se for o próprio conteúdo do usuário
   if (userId === currentUserId) return null;
 
-  const handleReport = async (reason) => {
-    setLoading(true);
+  const handleReport = async (e) => {
+    e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
-      await api.post('/api/reports', {
+      const reportData = {
         type,
         targetId,
-        reason
-      });
+        reason,
+        references: {
+          type,
+          id: targetId,
+          complaintId: contentRef?.complaintId,
+          content: contentRef?.content,
+          authorId: userId
+        }
+      };
 
-      setShowDialog(false);
+      await api.post('/api/reports', reportData);
+      
+      // Feedback mais claro
+      toast.success('Denúncia enviada com sucesso');
+      
+      setShowModal(false);
+      setReason('');
+      setHasReported(true);
     } catch (error) {
       setError(error.response?.data?.error || 'Erro ao enviar denúncia');
     } finally {
@@ -124,30 +158,80 @@ function ReportButton({ type, targetId, userId, currentUserId }) {
     }
   };
 
-  const handleClose = () => {
-    setShowDialog(false);
-    setError('');
+  // Não renderizar nada se já denunciou
+  if (hasReported) {
+    return null;
+  }
+
+  const getReportLabel = () => {
+    switch (type) {
+      case 'comment':
+        return 'Denunciar comentário';
+      case 'complaint':
+        return 'Denunciar denúncia';
+      case 'report':
+        return 'Denunciar esta denúncia';
+      default:
+        return 'Denunciar';
+    }
   };
 
   return (
     <>
       <button
-        onClick={() => setShowDialog(true)}
-        className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-all"
-        title="Denunciar"
-        aria-label="Denunciar"
+        onClick={() => setShowModal(true)}
+        className="text-gray-500 hover:text-red-500 flex items-center gap-1 text-sm"
+        title={getReportLabel()}
       >
-        <Flag className="h-4 w-4" aria-hidden="true" />
+        <Flag className="h-4 w-4" />
+        <span>{getReportLabel()}</span>
       </button>
 
-      {showDialog && (
-        <ReportDialog
-          type={type}
-          onClose={handleClose}
-          onSubmit={handleReport}
-          loading={loading}
-          error={error}
-        />
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Denunciar conteúdo</h3>
+            
+            <form onSubmit={handleReport}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo da denúncia
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="4"
+                  required
+                  placeholder="Descreva o motivo da denúncia..."
+                />
+              </div>
+
+              {error && (
+                <div className="mb-4 text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+                >
+                  {loading ? 'Enviando...' : 'Enviar denúncia'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </>
   );
