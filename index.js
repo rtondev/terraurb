@@ -74,12 +74,14 @@ const runMigrations = async () => {
         console.log('Coluna deviceInfo adicionada');
       }
 
+      // Adicionar lastActivity com valor padrão atual
       if (!columns.lastActivity) {
-        await sequelize.getQueryInterface().addColumn('Sessions', 'lastActivity', {
-          type: sequelize.Sequelize.DATE,
-          allowNull: false,
-          defaultValue: sequelize.Sequelize.NOW
-        });
+        await sequelize.query('SET SQL_MODE = "";'); // Desabilitar modo estrito
+        await sequelize.query(`
+          ALTER TABLE Sessions 
+          ADD COLUMN lastActivity DATETIME NOT NULL 
+          DEFAULT CURRENT_TIMESTAMP
+        `);
         console.log('Coluna lastActivity adicionada');
       }
 
