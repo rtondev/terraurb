@@ -284,6 +284,28 @@ const runMigrations = async () => {
       }
     }
     
+    // Verificar e criar tabela VerificationCodes
+    const verificationCodesExists = await sequelize.getQueryInterface()
+      .showAllTables()
+      .then(tables => tables.includes('VerificationCodes'));
+
+    if (!verificationCodesExists) {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS VerificationCodes (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          email VARCHAR(255) NOT NULL,
+          code VARCHAR(6) NOT NULL,
+          expiresAt DATETIME NOT NULL,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL,
+          INDEX idx_email (email),
+          INDEX idx_code (code),
+          INDEX idx_expires (expiresAt)
+        )
+      `);
+      console.log('Tabela VerificationCodes criada com sucesso');
+    }
+
     // Verificar e criar tabela ActivityLogs
     const activityLogsExists = await sequelize.getQueryInterface()
       .showAllTables()
