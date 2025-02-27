@@ -69,18 +69,83 @@ app.use((err, req, res, next) => {
 // Função para executar migrações
 const runMigrations = async () => {
   try {
-    // Primeiro criar tabela Users se não existir
+    // 1. Primeiro criar tabela Users se não existir
     const usersExists = await sequelize.getQueryInterface()
       .showAllTables()
       .then(tables => tables.includes('Users'));
 
     if (!usersExists) {
       console.log('Criando tabela Users...');
-      // Criar tabela Users
+      await sequelize.query(`
+        CREATE TABLE Users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          nickname VARCHAR(255) NOT NULL UNIQUE,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255) NOT NULL,
+          role ENUM('user', 'admin', 'city_hall') DEFAULT 'user',
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL,
+          INDEX idx_email (email),
+          INDEX idx_nickname (nickname)
+        )
+      `);
+      console.log('Tabela Users criada com sucesso');
     }
 
-    // Depois executar outras migrações
-    // Verificar se a tabela Sessions existe
+    // 2. Criar tabela Reports se não existir
+    const reportsExists = await sequelize.getQueryInterface()
+      .showAllTables()
+      .then(tables => tables.includes('Reports'));
+
+    if (!reportsExists) {
+      await sequelize.query(`
+        CREATE TABLE Reports (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          status ENUM('pending', 'resolved', 'rejected') DEFAULT 'pending',
+          adminNote TEXT,
+          resolvedBy INT,
+          resolvedAt DATETIME,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL,
+          FOREIGN KEY (resolvedBy) REFERENCES Users(id) ON DELETE SET NULL
+        )
+      `);
+      console.log('Tabela Reports criada com sucesso');
+    } else {
+      // Verificar e adicionar colunas se necessário
+      const columns = await sequelize.getQueryInterface().describeTable('Reports');
+      
+      if (!columns.adminNote) {
+        await sequelize.query(`
+          ALTER TABLE Reports 
+          ADD COLUMN adminNote TEXT NULL
+        `);
+        console.log('Coluna adminNote adicionada à tabela Reports');
+      }
+
+      if (!columns.resolvedAt) {
+        await sequelize.query(`
+          ALTER TABLE Reports 
+          ADD COLUMN resolvedAt DATETIME NULL
+        `);
+        console.log('Coluna resolvedAt adicionada à tabela Reports');
+      }
+
+      if (!columns.resolvedBy) {
+        await sequelize.query(`
+          ALTER TABLE Reports 
+          ADD COLUMN resolvedBy INT NULL,
+          ADD CONSTRAINT fk_reports_resolvedby 
+          FOREIGN KEY (resolvedBy) REFERENCES Users(id) 
+          ON DELETE SET NULL
+        `);
+        console.log('Coluna resolvedBy e foreign key adicionadas à tabela Reports');
+      }
+    }
+
+    // Verificar e atualizar tabela Sessions
     const tableExists = await sequelize.getQueryInterface()
       .showAllTables()
       .then(tables => tables.includes('Sessions'));
@@ -156,50 +221,6 @@ const runMigrations = async () => {
       }
     }
     
-    // Verificar e atualizar tabela Reports
-    const reportsExists = await sequelize.getQueryInterface()
-      .showAllTables()
-      .then(tables => tables.includes('Reports'));
-
-    if (!reportsExists) {
-      await Report.sync({ force: true });
-      console.log('Tabela Reports criada com sucesso');
-    } else {
-      const columns = await sequelize.getQueryInterface().describeTable('Reports');
-      
-      if (!columns.adminNote) {
-        await sequelize.query('SET SQL_MODE = "";'); // Desabilitar modo estrito
-        await sequelize.query(`
-          ALTER TABLE Reports 
-          ADD COLUMN adminNote TEXT NULL
-        `);
-        console.log('Coluna adminNote adicionada à tabela Reports');
-      }
-
-      // Verificar e atualizar outros campos necessários
-      if (!columns.resolvedAt) {
-        await sequelize.query(`
-          ALTER TABLE Reports 
-          ADD COLUMN resolvedAt DATETIME NULL
-        `);
-      }
-
-      if (!columns.resolvedBy) {
-        await sequelize.query(`
-          ALTER TABLE Reports 
-          ADD COLUMN resolvedBy INT NULL,
-          ADD FOREIGN KEY (resolvedBy) REFERENCES Users(id)
-        `);
-      }
-
-      // Atualizar enum de status se necessário
-      await sequelize.query(`
-        ALTER TABLE Reports 
-        MODIFY COLUMN status ENUM('pending', 'resolved', 'rejected') 
-        DEFAULT 'pending'
-      `);
-    }
-
     // Verificar e criar tabela ActivityLogs
     const activityLogsExists = await sequelize.getQueryInterface()
       .showAllTables()
