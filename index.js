@@ -69,6 +69,17 @@ app.use((err, req, res, next) => {
 // Função para executar migrações
 const runMigrations = async () => {
   try {
+    // Primeiro criar tabela Users se não existir
+    const usersExists = await sequelize.getQueryInterface()
+      .showAllTables()
+      .then(tables => tables.includes('Users'));
+
+    if (!usersExists) {
+      console.log('Criando tabela Users...');
+      // Criar tabela Users
+    }
+
+    // Depois executar outras migrações
     // Verificar se a tabela Sessions existe
     const tableExists = await sequelize.getQueryInterface()
       .showAllTables()
@@ -244,6 +255,7 @@ const runMigrations = async () => {
     console.log('Migrações concluídas com sucesso');
   } catch (error) {
     console.error('Erro ao executar migrações:', error);
+    throw error;
   }
 };
 
