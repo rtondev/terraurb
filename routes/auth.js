@@ -625,4 +625,19 @@ router.get('/profile/:nickname', async (req, res) => {
   }
 });
 
+// Rota pública para listar todos os usuários
+router.get('/users/public', async (req, res) => {
+  try {
+    const users = await User.findAll({
+      attributes: ['nickname', 'email'],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    res.status(500).json({ error: 'Erro ao listar usuários' });
+  }
+});
+
 module.exports = router;
