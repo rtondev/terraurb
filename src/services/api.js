@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://api.terraurb.com.br',
+  baseURL: 'https://api.terraurb.com',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
