@@ -69,80 +69,96 @@ app.use((err, req, res, next) => {
 // Função para executar migrações
 const runMigrations = async () => {
   try {
-    // 1. Primeiro criar tabela Users se não existir
-    const usersExists = await sequelize.getQueryInterface()
-      .showAllTables()
-      .then(tables => tables.includes('Users'));
+    // 1. Verificar e atualizar tabela Users
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS Users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nickname VARCHAR(255) NOT NULL UNIQUE,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('user', 'admin', 'city_hall') DEFAULT 'user',
+        createdAt DATETIME NOT NULL,
+        updatedAt DATETIME NOT NULL,
+        INDEX idx_email (email),
+        INDEX idx_nickname (nickname)
+      )
+    `);
 
-    if (!usersExists) {
-      console.log('Criando tabela Users...');
+    // Verificar e atualizar estrutura da tabela Users
+    const userColumns = await sequelize.getQueryInterface().describeTable('Users');
+    
+    // Verificar e adicionar role se não existir
+    if (!userColumns.role) {
       await sequelize.query(`
-        CREATE TABLE Users (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          nickname VARCHAR(255) NOT NULL UNIQUE,
-          email VARCHAR(255) NOT NULL UNIQUE,
-          password VARCHAR(255) NOT NULL,
-          role ENUM('user', 'admin', 'city_hall') DEFAULT 'user',
-          createdAt DATETIME NOT NULL,
-          updatedAt DATETIME NOT NULL,
-          INDEX idx_email (email),
-          INDEX idx_nickname (nickname)
-        )
+        ALTER TABLE Users 
+        ADD COLUMN role ENUM('user', 'admin', 'city_hall') DEFAULT 'user'
       `);
-      console.log('Tabela Users criada com sucesso');
+      console.log('Coluna role adicionada à tabela Users');
     }
 
-    // 2. Criar tabela Reports se não existir
-    const reportsExists = await sequelize.getQueryInterface()
-      .showAllTables()
-      .then(tables => tables.includes('Reports'));
+    // Verificar índices da tabela Users
+    const [userIndexes] = await sequelize.query(
+      'SHOW INDEX FROM Users'
+    );
 
-    if (!reportsExists) {
+    const existingUserIndexes = userIndexes.map(index => index.Key_name);
+
+    if (!existingUserIndexes.includes('idx_email')) {
+      await sequelize.query(
+        'CREATE INDEX idx_email ON Users (email)'
+      );
+    }
+
+    if (!existingUserIndexes.includes('idx_nickname')) {
+      await sequelize.query(
+        'CREATE INDEX idx_nickname ON Users (nickname)'
+      );
+    }
+
+    // 2. Criar ou atualizar tabela Reports
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS Reports (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        status ENUM('pending', 'resolved', 'rejected') DEFAULT 'pending',
+        adminNote TEXT,
+        resolvedBy INT,
+        resolvedAt DATETIME,
+        createdAt DATETIME NOT NULL,
+        updatedAt DATETIME NOT NULL,
+        FOREIGN KEY (resolvedBy) REFERENCES Users(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Verificar e adicionar colunas se necessário
+    const reportsColumns = await sequelize.getQueryInterface().describeTable('Reports');
+    
+    if (!reportsColumns.adminNote) {
       await sequelize.query(`
-        CREATE TABLE Reports (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          title VARCHAR(255) NOT NULL,
-          description TEXT,
-          status ENUM('pending', 'resolved', 'rejected') DEFAULT 'pending',
-          adminNote TEXT,
-          resolvedBy INT,
-          resolvedAt DATETIME,
-          createdAt DATETIME NOT NULL,
-          updatedAt DATETIME NOT NULL,
-          FOREIGN KEY (resolvedBy) REFERENCES Users(id) ON DELETE SET NULL
-        )
+        ALTER TABLE Reports 
+        ADD COLUMN adminNote TEXT NULL
       `);
-      console.log('Tabela Reports criada com sucesso');
-    } else {
-      // Verificar e adicionar colunas se necessário
-      const columns = await sequelize.getQueryInterface().describeTable('Reports');
-      
-      if (!columns.adminNote) {
-        await sequelize.query(`
-          ALTER TABLE Reports 
-          ADD COLUMN adminNote TEXT NULL
-        `);
-        console.log('Coluna adminNote adicionada à tabela Reports');
-      }
+      console.log('Coluna adminNote adicionada à tabela Reports');
+    }
 
-      if (!columns.resolvedAt) {
-        await sequelize.query(`
-          ALTER TABLE Reports 
-          ADD COLUMN resolvedAt DATETIME NULL
-        `);
-        console.log('Coluna resolvedAt adicionada à tabela Reports');
-      }
+    if (!reportsColumns.resolvedAt) {
+      await sequelize.query(`
+        ALTER TABLE Reports 
+        ADD COLUMN resolvedAt DATETIME NULL
+      `);
+      console.log('Coluna resolvedAt adicionada à tabela Reports');
+    }
 
-      if (!columns.resolvedBy) {
-        await sequelize.query(`
-          ALTER TABLE Reports 
-          ADD COLUMN resolvedBy INT NULL,
-          ADD CONSTRAINT fk_reports_resolvedby 
-          FOREIGN KEY (resolvedBy) REFERENCES Users(id) 
-          ON DELETE SET NULL
-        `);
-        console.log('Coluna resolvedBy e foreign key adicionadas à tabela Reports');
-      }
+    if (!reportsColumns.resolvedBy) {
+      await sequelize.query(`
+        ALTER TABLE Reports 
+        ADD COLUMN resolvedBy INT NULL,
+        ADD CONSTRAINT fk_reports_resolvedby 
+        FOREIGN KEY (resolvedBy) REFERENCES Users(id) 
+        ON DELETE SET NULL
+      `);
+      console.log('Coluna resolvedBy e foreign key adicionadas à tabela Reports');
     }
 
     // Verificar e atualizar tabela Sessions
