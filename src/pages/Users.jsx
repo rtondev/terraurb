@@ -17,23 +17,29 @@ function Users() {
 
   const loadUsers = async () => {
     try {
+      console.log('Iniciando carregamento de usuários...'); // Debug
+      setLoading(true);
       const response = await api.get('/api/admin/users');
+      console.log('Resposta da API:', response.data); // Debug
       setUsers(response.data);
       setError('');
     } catch (error) {
-      console.error('Erro ao carregar usuários:', error);
-      setError('Erro ao carregar usuários');
-      toast.error('Erro ao carregar usuários');
+      console.error('Erro detalhado:', error.response || error); // Debug completo
+      setError(error.response?.data?.error || 'Erro ao carregar usuários');
+      toast.error('Não foi possível carregar os usuários');
     } finally {
       setLoading(false);
     }
   };
 
   const formatDate = (date) => {
+    if (!date) return 'Data não disponível';
     return new Date(date).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -56,8 +62,8 @@ function Users() {
   };
 
   const filteredUsers = users.filter(user => 
-    user.nickname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    user?.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user?.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -67,6 +73,11 @@ function Users() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Usuários
           </h1>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">
+              Total: {users.length} usuários
+            </span>
+          </div>
         </div>
 
         {/* Busca */}
@@ -75,7 +86,7 @@ function Users() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar usuários..."
+              placeholder="Buscar por nome ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -99,19 +110,21 @@ function Users() {
             {filteredUsers.map(user => (
               <div
                 key={user.id}
-                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6"
+                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-100"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <User className="h-10 w-10 text-gray-400" />
+                    <div className="bg-gray-100 p-2 rounded-full">
+                      <User className="h-6 w-6 text-gray-600" />
+                    </div>
                     <div>
                       <Link 
                         to={`/usuario/${user.id}`}
                         className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
                       >
-                        {user.nickname}
+                        {user.nickname || 'Sem nome'}
                       </Link>
-                      <p className="text-sm text-gray-500">{user.email}</p>
+                      <p className="text-sm text-gray-500">{user.email || 'Sem email'}</p>
                     </div>
                   </div>
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
