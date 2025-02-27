@@ -24,9 +24,22 @@ router.use(isAdmin);
 // Listar todos os usuários
 router.get('/users', async (req, res) => {
   try {
+    console.log('Buscando usuários...'); // Debug
     const users = await User.findAll({
-      attributes: ['id', 'nickname', 'email', 'role', 'createdAt']
+      attributes: ['id', 'nickname', 'email', 'role', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: ActivityLog,
+          as: 'activities',
+          attributes: ['createdAt'],
+          limit: 1,
+          order: [['createdAt', 'DESC']]
+        }
+      ]
     });
+
+    console.log(`Encontrados ${users.length} usuários`); // Debug
     res.json(users);
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
@@ -83,34 +96,6 @@ router.get('/activity-logs', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar logs:', error);
     res.status(500).json({ error: 'Erro ao buscar logs de atividade' });
-  }
-});
-
-// Listar usuários
-router.get('/users', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Acesso negado' });
-    }
-
-    const users = await User.findAll({
-      attributes: ['id', 'nickname', 'email', 'role', 'createdAt'],
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: ActivityLog,
-          as: 'activities',
-          attributes: ['createdAt'],
-          limit: 1,
-          order: [['createdAt', 'DESC']]
-        }
-      ]
-    });
-
-    res.json(users);
-  } catch (error) {
-    console.error('Erro ao listar usuários:', error);
-    res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
 
