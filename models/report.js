@@ -57,7 +57,7 @@ const Report = sequelize.define('Report', {
   }
 });
 
-// Remover o método associate e definir as associações diretamente
+// Definir associações com aliases únicos
 Report.belongsTo(sequelize.models.User, {
   foreignKey: 'userId',
   as: 'reporter'
@@ -70,7 +70,7 @@ Report.belongsTo(sequelize.models.User, {
 
 Report.belongsTo(sequelize.models.Complaint, {
   foreignKey: 'complaintId',
-  as: 'complaint'
+  as: 'reportedComplaint'
 });
 
 module.exports = { Report };

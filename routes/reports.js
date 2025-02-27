@@ -83,7 +83,7 @@ router.get('/', authenticateToken, async (req, res) => {
         },
         {
           model: Complaint,
-          as: 'complaint',
+          as: 'reportedComplaint',
           attributes: ['id', 'title'],
           required: false
         }

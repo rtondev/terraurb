@@ -95,23 +95,7 @@ const setupAssociations = () => {
     as: 'resolvedReports'
   });
 
-  // Report associations
-  Report.belongsTo(User, {
-    foreignKey: 'userId',
-    as: 'reporter'
-  });
-
-  Report.belongsTo(User, {
-    foreignKey: 'resolvedBy',
-    as: 'resolver'
-  });
-
-  Report.belongsTo(Complaint, {
-    foreignKey: 'complaintId',
-    as: 'complaint'
-  });
-
-  // ... outras associações ...
+  // Não repetir as associações do Report aqui, pois já estão definidas no modelo
 };
 
 // Chamar setupAssociations antes de usar os modelos
