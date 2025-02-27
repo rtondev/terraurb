@@ -30,8 +30,31 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   if (req.method === 'POST') {
-    console.log('Headers:', req.headers);
-    console.log('Body raw:', req.body);
+    // Criar uma cópia do body para logging
+    const sanitizedBody = { ...req.body };
+    
+    // Remover dados sensíveis
+    if (sanitizedBody.password) {
+      sanitizedBody.password = '[REDACTED]';
+    }
+    if (sanitizedBody.newPassword) {
+      sanitizedBody.newPassword = '[REDACTED]';
+    }
+    if (sanitizedBody.oldPassword) {
+      sanitizedBody.oldPassword = '[REDACTED]';
+    }
+    if (sanitizedBody.token) {
+      sanitizedBody.token = '[REDACTED]';
+    }
+    if (sanitizedBody.refreshToken) {
+      sanitizedBody.refreshToken = '[REDACTED]';
+    }
+
+    console.log('Headers:', {
+      ...req.headers,
+      authorization: req.headers.authorization ? '[REDACTED]' : undefined
+    });
+    console.log('Body:', sanitizedBody);
   }
   next();
 });
