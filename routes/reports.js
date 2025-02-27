@@ -68,108 +68,21 @@ router.post('/', authenticateToken, async (req, res) => {
 // Listar denúncias (admin)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Acesso negado' });
-    }
-
     const reports = await Report.findAll({
-      where: {
-        status: 'pending'
-      },
-      order: [['createdAt', 'DESC']],
       include: [
         {
           model: User,
           as: 'reporter',
           attributes: ['id', 'nickname', 'email']
         }
-      ]
+      ],
+      where: {
+        status: 'pending'
+      },
+      order: [['createdAt', 'DESC']]
     });
 
-    // Buscar conteúdo denunciado com contexto
-    const reportsWithContent = await Promise.all(reports.map(async (report) => {
-      const reportData = report.toJSON();
-      
-      if (report.type === 'report') {
-        const targetReport = await Report.findByPk(report.targetId, {
-          include: [
-            {
-              model: User,
-              as: 'reporter',
-              attributes: ['id', 'nickname']
-            }
-          ]
-        });
-
-        if (targetReport) {
-          reportData.content = {
-            text: targetReport.reason,
-            author: targetReport.reporter.nickname,
-            authorId: targetReport.reporter.id,
-            createdAt: targetReport.createdAt
-          };
-        }
-      } else if (report.type === 'comment') {
-        const comment = await Comment.findByPk(report.targetId, {
-          include: [
-            {
-              model: User,
-              as: 'author',
-              attributes: ['id', 'nickname']
-            },
-            {
-              model: Complaint,
-              as: 'parentComplaint',
-              attributes: ['id', 'title']
-            }
-          ]
-        });
-
-        if (comment) {
-          reportData.content = {
-            text: comment.content,
-            author: comment.author.nickname,
-            context: `Comentário em: ${comment.parentComplaint.title}`,
-            createdAt: comment.createdAt
-          };
-        } else {
-          reportData.content = {
-            text: 'Comentário não encontrado',
-            author: 'Desconhecido',
-            context: 'Contexto indisponível'
-          };
-        }
-      } else if (report.type === 'complaint') {
-        const complaint = await Complaint.findByPk(report.targetId, {
-          include: [
-            {
-              model: User,
-              as: 'author',
-              attributes: ['id', 'nickname']
-            }
-          ]
-        });
-
-        if (complaint) {
-          reportData.content = {
-            title: complaint.title,
-            description: complaint.description,
-            author: complaint.author.nickname,
-            createdAt: complaint.createdAt
-          };
-        } else {
-          reportData.content = {
-            title: 'Denúncia não encontrada',
-            description: 'Conteúdo indisponível',
-            author: 'Desconhecido'
-          };
-        }
-      }
-
-      return reportData;
-    }));
-
-    res.json(reportsWithContent);
+    res.json(reports);
   } catch (error) {
     console.error('Erro ao listar denúncias:', error);
     res.status(500).json({ error: 'Erro ao listar denúncias' });

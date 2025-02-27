@@ -1,6 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('./db');
-const { User } = require('./user');
 
 const Report = sequelize.define('Report', {
   id: {
@@ -9,11 +8,8 @@ const Report = sequelize.define('Report', {
     autoIncrement: true
   },
   type: {
-    type: DataTypes.ENUM('comment', 'complaint', 'report'),
-    allowNull: false,
-    validate: {
-      isIn: [['comment', 'complaint', 'report']]
-    }
+    type: DataTypes.STRING,
+    allowNull: false
   },
   targetId: {
     type: DataTypes.INTEGER,
@@ -21,17 +17,11 @@ const Report = sequelize.define('Report', {
   },
   reason: {
     type: DataTypes.TEXT,
-    allowNull: false,
-    validate: {
-      notEmpty: true
-    }
+    allowNull: false
   },
   status: {
     type: DataTypes.ENUM('pending', 'resolved', 'rejected'),
-    defaultValue: 'pending',
-    validate: {
-      isIn: [['pending', 'resolved', 'rejected']]
-    }
+    defaultValue: 'pending'
   },
   adminNote: {
     type: DataTypes.TEXT,
@@ -64,16 +54,23 @@ const Report = sequelize.define('Report', {
       model: 'Complaints',
       key: 'id'
     }
-  },
-  references: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    comment: 'Referências ao conteúdo original denunciado'
   }
 });
 
-// Associações
-Report.belongsTo(User, { as: 'reporter', foreignKey: 'userId' });
-Report.belongsTo(User, { as: 'resolver', foreignKey: 'resolvedBy' });
+// Definir associações
+Report.associate = (models) => {
+  Report.belongsTo(models.User, {
+    foreignKey: 'userId',
+    as: 'reporter'
+  });
+  Report.belongsTo(models.User, {
+    foreignKey: 'resolvedBy',
+    as: 'resolver'
+  });
+  Report.belongsTo(models.Complaint, {
+    foreignKey: 'complaintId',
+    as: 'complaint'
+  });
+};
 
 module.exports = { Report };
