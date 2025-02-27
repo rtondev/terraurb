@@ -71,4 +71,20 @@ const ComplaintLog = sequelize.define('ComplaintLog', {
   }
 });
 
+// Definir associações
+Complaint.associate = (models) => {
+  Complaint.belongsTo(models.User, {
+    foreignKey: 'userId',
+    as: 'author'
+  });
+  
+  Complaint.hasMany(models.Comment, {
+    foreignKey: 'complaintId'
+  });
+  
+  Complaint.belongsToMany(models.Tag, {
+    through: 'ComplaintTags'
+  });
+};
+
 module.exports = { Complaint, ComplaintLog };

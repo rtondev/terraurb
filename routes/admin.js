@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { User, ActivityLog } = require('../models');
+const { User } = require('../models/user');
+const { ActivityLog } = require('../models/activityLog');
 const { authenticateToken } = require('../middleware/auth');
+const { Op } = require('sequelize');
 
 // Middleware para verificar se o usuário é admin
 const isAdmin = async (req, res, next) => {
@@ -51,22 +53,90 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-// Dentro da rota de logs
+// Rota para buscar logs de atividade
 router.get('/activity-logs', async (req, res) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    // Buscar logs dos últimos 30 dias
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
     const logs = await ActivityLog.findAll({
+      where: {
+        createdAt: {
+          [Op.gte]: thirtyDaysAgo
+        }
+      },
       include: [{
         model: User,
-        attributes: ['id', 'nickname', 'avatarUrl'],
+        attributes: ['id', 'nickname'],
         as: 'user'
       }],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      limit: 100
     });
 
     res.json(logs);
   } catch (error) {
     console.error('Erro ao buscar logs:', error);
     res.status(500).json({ error: 'Erro ao buscar logs de atividade' });
+  }
+});
+
+// Listar todos os usuários
+router.get('/users', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const users = await User.findAll({
+      attributes: ['id', 'nickname', 'email', 'role', 'createdAt'],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    res.status(500).json({ error: 'Erro ao listar usuários' });
+  }
+});
+
+// Alterar papel do usuário
+router.patch('/users/:id/role', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!['admin', 'user'].includes(role)) {
+      return res.status(400).json({ error: 'Papel inválido' });
+    }
+
+    const user = await User.findByPk(id);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Impedir que o admin remova seu próprio acesso
+    if (user.id === req.user.id) {
+      return res.status(400).json({ 
+        error: 'Não é possível alterar suas próprias permissões' 
+      });
+    }
+
+    await user.update({ role });
+
+    res.json({ message: 'Papel atualizado com sucesso', user });
+  } catch (error) {
+    console.error('Erro ao atualizar papel:', error);
+    res.status(500).json({ error: 'Erro ao atualizar papel' });
   }
 });
 

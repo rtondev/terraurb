@@ -1,5 +1,5 @@
-const { Sequelize, DataTypes } = require('sequelize');
-const { sequelize, User } = require('./db');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('./db');
 
 const ActivityLog = sequelize.define('ActivityLog', {
   id: {
@@ -7,35 +7,41 @@ const ActivityLog = sequelize.define('ActivityLog', {
     primaryKey: true,
     autoIncrement: true
   },
-  type: {
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  action: {
     type: DataTypes.STRING,
     allowNull: false
   },
-  description: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  deviceInfo: {
+  details: {
     type: DataTypes.JSON,
     allowNull: true
   }
 }, {
-  // Configurações adicionais
-  tableName: 'activity_logs', // Nome da tabela em snake_case
-  timestamps: true
+  tableName: 'ActivityLogs',
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['userId']
+    },
+    {
+      fields: ['createdAt']
+    }
+  ]
 });
 
-// Definir a associação corretamente
-ActivityLog.belongsTo(User, {
-  foreignKey: {
-    name: 'userId',
-    allowNull: false
-  },
-  onDelete: 'CASCADE'
-});
-
-User.hasMany(ActivityLog, {
-  foreignKey: 'userId'
-});
+// Associações
+ActivityLog.associate = (models) => {
+  ActivityLog.belongsTo(models.User, {
+    foreignKey: 'userId',
+    as: 'user'
+  });
+};
 
 module.exports = { ActivityLog }; 

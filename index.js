@@ -14,6 +14,11 @@ const { createDefaultAdmin } = require('./utils/adminSetup');
 const statsRouter = require('./routes/stats');
 const { Session } = require('./models/session');
 const path = require('path');
+const { Report } = require('./models/report');
+const { Comment } = require('./models/comment');
+const { User } = require('./models/user');
+const { Complaint } = require('./models/complaint');
+const { ActivityLog } = require('./models/activityLog');
 
 const app = express();
 
@@ -42,6 +47,17 @@ app.use('/api/docs', docsRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/stats', statsRouter);
+
+// Configurar associações
+Comment.associate({ User, Complaint });
+ActivityLog.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user'
+});
+User.hasMany(ActivityLog, {
+  foreignKey: 'userId',
+  as: 'activities'
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -129,6 +145,102 @@ const runMigrations = async () => {
       }
     }
     
+    // Verificar e atualizar tabela Reports
+    const reportsExists = await sequelize.getQueryInterface()
+      .showAllTables()
+      .then(tables => tables.includes('Reports'));
+
+    if (!reportsExists) {
+      await Report.sync({ force: true });
+      console.log('Tabela Reports criada com sucesso');
+    } else {
+      const columns = await sequelize.getQueryInterface().describeTable('Reports');
+      
+      if (!columns.adminNote) {
+        await sequelize.query('SET SQL_MODE = "";'); // Desabilitar modo estrito
+        await sequelize.query(`
+          ALTER TABLE Reports 
+          ADD COLUMN adminNote TEXT NULL
+        `);
+        console.log('Coluna adminNote adicionada à tabela Reports');
+      }
+
+      // Verificar e atualizar outros campos necessários
+      if (!columns.resolvedAt) {
+        await sequelize.query(`
+          ALTER TABLE Reports 
+          ADD COLUMN resolvedAt DATETIME NULL
+        `);
+      }
+
+      if (!columns.resolvedBy) {
+        await sequelize.query(`
+          ALTER TABLE Reports 
+          ADD COLUMN resolvedBy INT NULL,
+          ADD FOREIGN KEY (resolvedBy) REFERENCES Users(id)
+        `);
+      }
+
+      // Atualizar enum de status se necessário
+      await sequelize.query(`
+        ALTER TABLE Reports 
+        MODIFY COLUMN status ENUM('pending', 'resolved', 'rejected') 
+        DEFAULT 'pending'
+      `);
+    }
+
+    // Verificar e criar tabela ActivityLogs
+    const activityLogsExists = await sequelize.getQueryInterface()
+      .showAllTables()
+      .then(tables => tables.includes('ActivityLogs'));
+
+    if (!activityLogsExists) {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS ActivityLogs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          userId INT,
+          action VARCHAR(255) NOT NULL,
+          details JSON,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL,
+          FOREIGN KEY (userId) REFERENCES Users(id) ON DELETE SET NULL,
+          INDEX idx_user_id (userId),
+          INDEX idx_created_at (createdAt)
+        )
+      `);
+      console.log('Tabela ActivityLogs criada com sucesso');
+    } else {
+      // Verificar e adicionar colunas/índices necessários
+      const columns = await sequelize.getQueryInterface().describeTable('ActivityLogs');
+      
+      if (!columns.details) {
+        await sequelize.query(`
+          ALTER TABLE ActivityLogs 
+          ADD COLUMN details JSON NULL
+        `);
+        console.log('Coluna details adicionada à tabela ActivityLogs');
+      }
+
+      // Verificar índices existentes
+      const [indexes] = await sequelize.query(
+        'SHOW INDEX FROM ActivityLogs'
+      );
+
+      const existingIndexes = indexes.map(index => index.Key_name);
+
+      if (!existingIndexes.includes('idx_user_id')) {
+        await sequelize.query(
+          'CREATE INDEX idx_user_id ON ActivityLogs (userId)'
+        );
+      }
+
+      if (!existingIndexes.includes('idx_created_at')) {
+        await sequelize.query(
+          'CREATE INDEX idx_created_at ON ActivityLogs (createdAt)'
+        );
+      }
+    }
+
     console.log('Migrações concluídas com sucesso');
   } catch (error) {
     console.error('Erro ao executar migrações:', error);

@@ -1,12 +1,19 @@
-const { Sequelize, DataTypes } = require('sequelize');
-const { sequelize, User } = require('./db');
-const { Complaint } = require('./complaint');
-const { Comment } = require('./comment');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('./db');
+const { User } = require('./user');
 
 const Report = sequelize.define('Report', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   type: {
-    type: DataTypes.STRING,
-    allowNull: false
+    type: DataTypes.ENUM('comment', 'complaint', 'report'),
+    allowNull: false,
+    validate: {
+      isIn: [['comment', 'complaint', 'report']]
+    }
   },
   targetId: {
     type: DataTypes.INTEGER,
@@ -14,37 +21,59 @@ const Report = sequelize.define('Report', {
   },
   reason: {
     type: DataTypes.TEXT,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
   },
   status: {
-    type: DataTypes.STRING,
-    defaultValue: 'Pendente'
+    type: DataTypes.ENUM('pending', 'resolved', 'rejected'),
+    defaultValue: 'pending',
+    validate: {
+      isIn: [['pending', 'resolved', 'rejected']]
+    }
   },
   adminNote: {
-    type: DataTypes.TEXT
+    type: DataTypes.TEXT,
+    allowNull: true
   },
   resolvedAt: {
-    type: DataTypes.DATE
+    type: DataTypes.DATE,
+    allowNull: true
   },
   resolvedBy: {
-    type: DataTypes.INTEGER
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  complaintId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Complaints',
+      key: 'id'
+    }
+  },
+  references: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Referências ao conteúdo original denunciado'
   }
 });
 
-// Associations
+// Associações
 Report.belongsTo(User, { as: 'reporter', foreignKey: 'userId' });
 Report.belongsTo(User, { as: 'resolver', foreignKey: 'resolvedBy' });
-
-// Associações polimórficas
-Report.belongsTo(Complaint, {
-  foreignKey: 'targetId',
-  constraints: false,
-  as: 'complaintTarget'
-});
-Report.belongsTo(Comment, {
-  foreignKey: 'targetId',
-  constraints: false,
-  as: 'commentTarget'
-});
 
 module.exports = { Report };

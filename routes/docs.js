@@ -1,5 +1,6 @@
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 const router = express.Router();
 
 const swaggerDocument = {
@@ -1156,5 +1157,202 @@ router.get('/', swaggerUi.setup(swaggerDocument, {
   customSiteTitle: "TerraurB API Documentation",
   customfavIcon: "/favicon.ico"
 }));
+
+const options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'TerraUrb API',
+      version: '2.0.0',
+      description: 'API do sistema TerraUrb para gestão de denúncias urbanas',
+      contact: {
+        name: 'Equipe TerraUrb',
+        email: 'aterraurb@gmail.com'
+      }
+    },
+    servers: [
+      {
+        url: 'http://localhost:3000',
+        description: 'Servidor de Desenvolvimento'
+      }
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            nickname: { type: 'string' },
+            email: { type: 'string' },
+            role: { type: 'string', enum: ['user', 'admin', 'city_hall'] },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        Complaint: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            location: { type: 'string' },
+            status: { 
+              type: 'string',
+              enum: ['Em Análise', 'Em Andamento', 'Resolvido', 'Cancelado', 'Em Verificação', 'Reaberto']
+            },
+            images: { type: 'array', items: { type: 'string' } },
+            polygonCoordinates: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  lat: { type: 'number' },
+                  lng: { type: 'number' }
+                }
+              }
+            },
+            userId: { type: 'integer' },
+            tags: {
+              type: 'array',
+              items: { 
+                type: 'object',
+                properties: {
+                  id: { type: 'integer' },
+                  name: { type: 'string' }
+                }
+              }
+            },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        Comment: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            content: { type: 'string' },
+            userId: { type: 'integer' },
+            complaintId: { type: 'integer' },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        ActivityLog: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            userId: { type: 'integer' },
+            action: { type: 'string' },
+            details: { type: 'object' },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        Tag: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            name: { type: 'string' }
+          }
+        }
+      }
+    }
+  },
+  apis: ['./routes/*.js']
+};
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Auth
+ *     description: Autenticação e gerenciamento de usuários
+ *   - name: Complaints
+ *     description: Gerenciamento de denúncias
+ *   - name: Comments
+ *     description: Gerenciamento de comentários
+ *   - name: Tags
+ *     description: Gerenciamento de tags
+ *   - name: Admin
+ *     description: Funcionalidades administrativas
+ *   - name: Reports
+ *     description: Relatórios e estatísticas
+ *   - name: ActivityLogs
+ *     description: Logs de atividades do sistema
+ */
+
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Registra um novo usuário
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nickname
+ *               - email
+ *               - password
+ *             properties:
+ *               nickname: 
+ *                 type: string
+ *                 minLength: 3
+ *                 maxLength: 30
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       201:
+ *         description: Usuário registrado com sucesso
+ */
+
+/**
+ * @swagger
+ * /api/complaints:
+ *   get:
+ *     tags: [Complaints]
+ *     summary: Lista todas as denúncias
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de denúncias
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Complaint'
+ */
+
+/**
+ * @swagger
+ * /api/admin/activity-logs:
+ *   get:
+ *     tags: [ActivityLogs]
+ *     summary: Lista logs de atividade
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de logs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/ActivityLog'
+ */
+
+const specs = swaggerJsdoc(options);
 
 module.exports = router;

@@ -1,176 +1,256 @@
 const express = require('express');
 const router = express.Router();
-const { Report, User, Complaint, Comment } = require('../models');
+const { Report } = require('../models/report');
 const { authenticateToken } = require('../middleware/auth');
+const { Comment } = require('../models/comment');
+const { Complaint } = require('../models/complaint');
+const { User } = require('../models/user');
+const { sequelize } = require('../models/db');
 
-// Listar todos os reports (admin only)
-router.get('/', authenticateToken, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem ver todos os reports' });
-    }
-
-    const reports = await Report.findAll({
-      include: [
-        {
-          model: User,
-          as: 'reporter',
-          attributes: ['id', 'nickname']
-        },
-        {
-          model: User,
-          as: 'resolver',
-          attributes: ['id', 'nickname']
-        },
-        {
-          model: Complaint,
-          as: 'complaintTarget',
-          attributes: ['id', 'title'],
-          required: false
-        },
-        {
-          model: Comment,
-          as: 'commentTarget',
-          attributes: ['id', 'content'],
-          required: false,
-          include: [{
-            model: User,
-            attributes: ['id', 'nickname']
-          }]
-        }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
-
-    // Formatar os dados para a resposta
-    const formattedReports = reports.map(report => {
-      const reportData = report.toJSON();
-      
-      // Adicionar informações do alvo baseado no tipo
-      if (report.type === 'complaint' && report.complaintTarget) {
-        reportData.target = {
-          id: report.complaintTarget.id,
-          title: report.complaintTarget.title,
-          type: 'Denúncia'
-        };
-      } else if (report.type === 'comment' && report.commentTarget) {
-        reportData.target = {
-          id: report.commentTarget.id,
-          content: report.commentTarget.content,
-          author: report.commentTarget.User?.nickname,
-          type: 'Comentário'
-        };
-      }
-
-      // Limpar as associações brutas
-      delete reportData.complaintTarget;
-      delete reportData.commentTarget;
-
-      return reportData;
-    });
-
-    res.json(formattedReports);
-  } catch (error) {
-    console.error('Erro ao listar reports:', error);
-    res.status(500).json({ error: 'Erro ao listar reports' });
-  }
-});
-
-// Criar novo report
+// Criar denúncia
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { type, targetId, reason } = req.body;
+    const { type, targetId, reason, references } = req.body;
     const userId = req.user.id;
 
+    // Validação dos campos obrigatórios
+    if (!type || !targetId || !reason) {
+      return res.status(400).json({ 
+        error: 'Campos obrigatórios: type, targetId e reason' 
+      });
+    }
+
     // Validar tipo
-    if (!['complaint', 'comment'].includes(type)) {
-      return res.status(400).json({ error: 'Tipo de denúncia inválido' });
+    if (!['comment', 'complaint'].includes(type)) {
+      return res.status(400).json({ 
+        error: 'Tipo inválido. Use: comment ou complaint' 
+      });
     }
 
-    // Verificar se o alvo existe
-    let target;
-    if (type === 'complaint') {
-      target = await Complaint.findByPk(targetId);
-    } else {
-      target = await Comment.findByPk(targetId);
-    }
-
-    if (!target) {
-      return res.status(404).json({ error: 'Conteúdo não encontrado' });
-    }
-
-    // Verificar se já existe uma denúncia deste usuário para este alvo
+    // Verificar se já existe uma denúncia do mesmo usuário
     const existingReport = await Report.findOne({
       where: {
         type,
         targetId,
-        userId
+        userId,
+        status: 'pending' // Apenas denúncias pendentes
       }
     });
 
     if (existingReport) {
-      return res.status(400).json({ error: 'Você já denunciou este conteúdo' });
+      return res.status(400).json({ 
+        error: 'Você já denunciou este item' 
+      });
     }
 
+    // Criar a denúncia com referências
     const report = await Report.create({
       type,
       targetId,
       reason,
       userId,
-      status: 'Pendente'
+      status: 'pending',
+      references,
+      complaintId: type === 'complaint' ? targetId : references?.complaintId
     });
 
     res.status(201).json(report);
+
   } catch (error) {
     console.error('Erro ao criar denúncia:', error);
-    res.status(500).json({ error: 'Erro ao criar denúncia' });
+    res.status(500).json({ 
+      error: 'Erro ao processar denúncia',
+      details: error.message 
+    });
   }
 });
 
-// Atualizar status do report (admin only)
-router.put('/:id', authenticateToken, async (req, res) => {
+// Listar denúncias (admin)
+router.get('/', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem atualizar reports' });
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
-    const report = await Report.findByPk(req.params.id);
-    if (!report) {
-      return res.status(404).json({ error: 'Report não encontrado' });
+    const reports = await Report.findAll({
+      where: {
+        status: 'pending'
+      },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'reporter',
+          attributes: ['id', 'nickname', 'email']
+        }
+      ]
+    });
+
+    // Buscar conteúdo denunciado com contexto
+    const reportsWithContent = await Promise.all(reports.map(async (report) => {
+      const reportData = report.toJSON();
+      
+      if (report.type === 'report') {
+        const targetReport = await Report.findByPk(report.targetId, {
+          include: [
+            {
+              model: User,
+              as: 'reporter',
+              attributes: ['id', 'nickname']
+            }
+          ]
+        });
+
+        if (targetReport) {
+          reportData.content = {
+            text: targetReport.reason,
+            author: targetReport.reporter.nickname,
+            authorId: targetReport.reporter.id,
+            createdAt: targetReport.createdAt
+          };
+        }
+      } else if (report.type === 'comment') {
+        const comment = await Comment.findByPk(report.targetId, {
+          include: [
+            {
+              model: User,
+              as: 'author',
+              attributes: ['id', 'nickname']
+            },
+            {
+              model: Complaint,
+              as: 'parentComplaint',
+              attributes: ['id', 'title']
+            }
+          ]
+        });
+
+        if (comment) {
+          reportData.content = {
+            text: comment.content,
+            author: comment.author.nickname,
+            context: `Comentário em: ${comment.parentComplaint.title}`,
+            createdAt: comment.createdAt
+          };
+        } else {
+          reportData.content = {
+            text: 'Comentário não encontrado',
+            author: 'Desconhecido',
+            context: 'Contexto indisponível'
+          };
+        }
+      } else if (report.type === 'complaint') {
+        const complaint = await Complaint.findByPk(report.targetId, {
+          include: [
+            {
+              model: User,
+              as: 'author',
+              attributes: ['id', 'nickname']
+            }
+          ]
+        });
+
+        if (complaint) {
+          reportData.content = {
+            title: complaint.title,
+            description: complaint.description,
+            author: complaint.author.nickname,
+            createdAt: complaint.createdAt
+          };
+        } else {
+          reportData.content = {
+            title: 'Denúncia não encontrada',
+            description: 'Conteúdo indisponível',
+            author: 'Desconhecido'
+          };
+        }
+      }
+
+      return reportData;
+    }));
+
+    res.json(reportsWithContent);
+  } catch (error) {
+    console.error('Erro ao listar denúncias:', error);
+    res.status(500).json({ error: 'Erro ao listar denúncias' });
+  }
+});
+
+// Resolver denúncia (admin)
+router.patch('/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
+    const { id } = req.params;
     const { status, adminNote } = req.body;
-    await report.update({
-      status,
-      adminNote,
-      resolvedAt: status === 'resolved' ? new Date() : null,
-      resolvedBy: status === 'resolved' ? req.user.id : null
+
+    if (!['resolved', 'rejected'].includes(status)) {
+      return res.status(400).json({ 
+        error: 'Status inválido. Use: resolved ou rejected' 
+      });
+    }
+
+    const report = await Report.findByPk(id);
+    if (!report) {
+      return res.status(404).json({ error: 'Denúncia não encontrada' });
+    }
+
+    await sequelize.transaction(async (t) => {
+      // Atualizar status da denúncia
+      await report.update({
+        status,
+        adminNote,
+        resolvedAt: new Date(),
+        resolvedBy: req.user.id
+      }, { transaction: t });
+
+      // Se aprovada, remover o conteúdo denunciado
+      if (status === 'resolved') {
+        if (report.type === 'comment') {
+          await Comment.destroy({
+            where: { id: report.targetId },
+            transaction: t
+          });
+        } else if (report.type === 'complaint') {
+          await Complaint.update(
+            { status: 'Cancelado' },
+            { 
+              where: { id: report.targetId },
+              transaction: t
+            }
+          );
+        }
+      }
     });
 
     res.json(report);
   } catch (error) {
-    console.error('Erro ao atualizar report:', error);
-    res.status(500).json({ error: 'Erro ao atualizar report' });
+    console.error('Erro ao resolver denúncia:', error);
+    res.status(500).json({ error: 'Erro ao resolver denúncia' });
   }
 });
 
-// Deletar report (admin only)
-router.delete('/:id', authenticateToken, async (req, res) => {
+// Verificar se usuário já denunciou
+router.get('/check', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem deletar reports' });
-    }
+    const { type, targetId } = req.query;
+    const userId = req.user.id;
 
-    const report = await Report.findByPk(req.params.id);
-    if (!report) {
-      return res.status(404).json({ error: 'Report não encontrado' });
-    }
+    const existingReport = await Report.findOne({
+      where: {
+        type,
+        targetId,
+        userId,
+        status: 'pending'
+      }
+    });
 
-    await report.destroy();
-    res.status(204).send();
+    res.json({ exists: !!existingReport });
   } catch (error) {
-    console.error('Erro ao deletar report:', error);
-    res.status(500).json({ error: 'Erro ao deletar report' });
+    console.error('Erro ao verificar denúncia:', error);
+    res.status(500).json({ error: 'Erro ao verificar denúncia' });
   }
 });
 

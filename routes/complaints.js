@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { Complaint, ComplaintLog, User, Tag } = require('../models');
+const { Complaint, ComplaintLog, User, Tag, Comment } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
+const { sequelize } = require('../models/db');
 
 // Middleware to check if user is authorized to change complaint status
 const canChangeStatus = (req, res, next) => {
@@ -67,23 +68,52 @@ router.get('/my', authenticateToken, async (req, res) => {
 });
 
 // Get all complaints
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const complaints = await Complaint.findAll({
       include: [
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'nickname']
+          attributes: ['id', 'nickname'],
+          required: true
         },
         {
           model: Tag,
+          attributes: ['id', 'name'],
           through: { attributes: [] }
         }
       ],
+      attributes: {
+        include: [
+          [
+            sequelize.literal(`(
+              SELECT COUNT(*)
+              FROM Comments
+              WHERE Comments.complaintId = Complaint.id
+            )`),
+            'commentsCount'
+          ]
+        ]
+      },
       order: [['createdAt', 'DESC']]
     });
-    res.json(complaints);
+
+    // Garantir que os dados estão no formato esperado
+    const formattedComplaints = complaints.map(complaint => {
+      const plainComplaint = complaint.get({ plain: true });
+      return {
+        ...plainComplaint,
+        commentsCount: parseInt(plainComplaint.commentsCount) || 0,
+        tags: plainComplaint.Tags || [],
+        user: {
+          id: plainComplaint.author.id,
+          nickname: plainComplaint.author.nickname
+        }
+      };
+    });
+
+    res.json(formattedComplaints);
   } catch (error) {
     console.error('Erro ao listar denúncias:', error);
     res.status(500).json({ error: 'Erro ao listar denúncias' });
