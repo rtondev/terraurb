@@ -86,7 +86,7 @@ router.get('/activity-logs', async (req, res) => {
   }
 });
 
-// Listar todos os usuários
+// Listar usuários
 router.get('/users', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -95,7 +95,16 @@ router.get('/users', authenticateToken, async (req, res) => {
 
     const users = await User.findAll({
       attributes: ['id', 'nickname', 'email', 'role', 'createdAt'],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: ActivityLog,
+          as: 'activities',
+          attributes: ['createdAt'],
+          limit: 1,
+          order: [['createdAt', 'DESC']]
+        }
+      ]
     });
 
     res.json(users);
