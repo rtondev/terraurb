@@ -24,38 +24,63 @@ router.use(isAdmin);
 // Listar todos os usuários
 router.get('/users', async (req, res) => {
   try {
-    console.log('Buscando usuários...'); // Debug
     const users = await User.findAll({
-      attributes: ['id', 'nickname', 'email', 'role', 'createdAt'],
-      order: [['createdAt', 'DESC']],
+      attributes: [
+        'id',
+        'nickname',
+        'email',
+        'role',
+        'createdAt',
+        'fullName',
+        'city',
+        'state',
+        'phone',
+        'bio',
+        'avatarUrl'
+      ],
       include: [
         {
           model: ActivityLog,
           as: 'activities',
-          attributes: ['createdAt'],
-          limit: 1,
+          attributes: ['createdAt', 'type', 'description'],
+          limit: 5,
           order: [['createdAt', 'DESC']]
         }
-      ]
+      ],
+      order: [['createdAt', 'DESC']]
     });
 
-    console.log('Dados dos usuários:', JSON.stringify(users, null, 2)); // Log detalhado
-    console.log(`Encontrados ${users.length} usuários`);
-    
-    // Garantir que todos os campos necessários estejam presentes
-    const sanitizedUsers = users.map(user => ({
-      id: user.id,
-      nickname: user.nickname || 'Sem nome',
-      email: user.email || 'Sem email',
-      role: user.role || 'user',
-      createdAt: user.createdAt,
-      activities: user.activities || []
-    }));
+    if (!users) {
+      return res.status(404).json({ error: 'Nenhum usuário encontrado' });
+    }
 
-    res.json(sanitizedUsers);
+    // Formatar os dados antes de enviar
+    const formattedUsers = users.map(user => {
+      const userData = user.get({ plain: true });
+      return {
+        id: userData.id,
+        nickname: userData.nickname || 'Sem nickname',
+        email: userData.email || 'Sem email',
+        role: userData.role || 'user',
+        fullName: userData.fullName || 'Nome não informado',
+        city: userData.city || 'Cidade não informada',
+        state: userData.state || 'Estado não informado',
+        phone: userData.phone || 'Telefone não informado',
+        bio: userData.bio || 'Bio não informada',
+        avatarUrl: userData.avatarUrl || null,
+        createdAt: userData.createdAt,
+        lastActivity: userData.activities?.[0]?.createdAt || null,
+        recentActivities: userData.activities || []
+      };
+    });
+
+    res.json(formattedUsers);
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
-    res.status(500).json({ error: 'Erro ao listar usuários' });
+    res.status(500).json({ 
+      error: 'Erro ao listar usuários',
+      details: error.message 
+    });
   }
 });
 
