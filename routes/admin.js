@@ -30,19 +30,13 @@ router.get('/users', async (req, res) => {
         'nickname',
         'email',
         'role',
-        'createdAt',
-        'fullName',
-        'city',
-        'state',
-        'phone',
-        'bio',
-        'avatarUrl'
+        'createdAt'
       ],
       include: [
         {
           model: ActivityLog,
           as: 'activities',
-          attributes: ['createdAt', 'type', 'description'],
+          attributes: ['createdAt'],
           limit: 5,
           order: [['createdAt', 'DESC']]
         }
@@ -62,15 +56,8 @@ router.get('/users', async (req, res) => {
         nickname: userData.nickname || 'Sem nickname',
         email: userData.email || 'Sem email',
         role: userData.role || 'user',
-        fullName: userData.fullName || 'Nome não informado',
-        city: userData.city || 'Cidade não informada',
-        state: userData.state || 'Estado não informado',
-        phone: userData.phone || 'Telefone não informado',
-        bio: userData.bio || 'Bio não informada',
-        avatarUrl: userData.avatarUrl || null,
         createdAt: userData.createdAt,
-        lastActivity: userData.activities?.[0]?.createdAt || null,
-        recentActivities: userData.activities || []
+        lastActivity: userData.activities?.[0]?.createdAt || null
       };
     });
 
