@@ -57,20 +57,20 @@ const Report = sequelize.define('Report', {
   }
 });
 
-// Definir associações
-Report.associate = (models) => {
-  Report.belongsTo(models.User, {
-    foreignKey: 'userId',
-    as: 'reporter'
-  });
-  Report.belongsTo(models.User, {
-    foreignKey: 'resolvedBy',
-    as: 'resolver'
-  });
-  Report.belongsTo(models.Complaint, {
-    foreignKey: 'complaintId',
-    as: 'complaint'
-  });
-};
+// Remover o método associate e definir as associações diretamente
+Report.belongsTo(sequelize.models.User, {
+  foreignKey: 'userId',
+  as: 'reporter'
+});
+
+Report.belongsTo(sequelize.models.User, {
+  foreignKey: 'resolvedBy',
+  as: 'resolver'
+});
+
+Report.belongsTo(sequelize.models.Complaint, {
+  foreignKey: 'complaintId',
+  as: 'complaint'
+});
 
 module.exports = { Report };

@@ -82,6 +82,41 @@ User.hasMany(ActivityLog, {
   as: 'activities'
 });
 
+// Configurar associações antes de usar os modelos
+const setupAssociations = () => {
+  // User associations
+  User.hasMany(Report, {
+    foreignKey: 'userId',
+    as: 'reports'
+  });
+
+  User.hasMany(Report, {
+    foreignKey: 'resolvedBy',
+    as: 'resolvedReports'
+  });
+
+  // Report associations
+  Report.belongsTo(User, {
+    foreignKey: 'userId',
+    as: 'reporter'
+  });
+
+  Report.belongsTo(User, {
+    foreignKey: 'resolvedBy',
+    as: 'resolver'
+  });
+
+  Report.belongsTo(Complaint, {
+    foreignKey: 'complaintId',
+    as: 'complaint'
+  });
+
+  // ... outras associações ...
+};
+
+// Chamar setupAssociations antes de usar os modelos
+setupAssociations();
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(`Error: ${err.message}`);
@@ -142,15 +177,20 @@ const runMigrations = async () => {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS Reports (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        description TEXT,
+        type VARCHAR(255) NOT NULL,
+        targetId INT NOT NULL,
+        reason TEXT NOT NULL,
         status ENUM('pending', 'resolved', 'rejected') DEFAULT 'pending',
         adminNote TEXT,
-        resolvedBy INT,
         resolvedAt DATETIME,
+        resolvedBy INT,
+        userId INT NOT NULL,
+        complaintId INT,
         createdAt DATETIME NOT NULL,
         updatedAt DATETIME NOT NULL,
-        FOREIGN KEY (resolvedBy) REFERENCES Users(id) ON DELETE SET NULL
+        FOREIGN KEY (resolvedBy) REFERENCES Users(id) ON DELETE SET NULL,
+        FOREIGN KEY (userId) REFERENCES Users(id),
+        FOREIGN KEY (complaintId) REFERENCES Complaints(id) ON DELETE SET NULL
       )
     `);
 

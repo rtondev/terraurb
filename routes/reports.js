@@ -74,6 +74,18 @@ router.get('/', authenticateToken, async (req, res) => {
           model: User,
           as: 'reporter',
           attributes: ['id', 'nickname', 'email']
+        },
+        {
+          model: User,
+          as: 'resolver',
+          attributes: ['id', 'nickname'],
+          required: false
+        },
+        {
+          model: Complaint,
+          as: 'complaint',
+          attributes: ['id', 'title'],
+          required: false
         }
       ],
       where: {
