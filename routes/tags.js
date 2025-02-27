@@ -1,85 +1,73 @@
 const express = require('express');
 const router = express.Router();
-const { Tag } = require('../models');
+const { Tag, Complaint } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 
-// Listar todas as tags
+// Listar tags
 router.get('/', async (req, res) => {
   try {
     const tags = await Tag.findAll({
+      include: [{
+        model: Complaint,
+        attributes: ['id'],
+      }],
       order: [['name', 'ASC']]
     });
-    res.json(tags);
+
+    // Formatar resposta incluindo contagem de denúncias
+    const formattedTags = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      complaintCount: tag.Complaints?.length || 0,
+      createdAt: tag.createdAt
+    }));
+
+    res.json(formattedTags);
   } catch (error) {
     console.error('Erro ao listar tags:', error);
     res.status(500).json({ error: 'Erro ao listar tags' });
   }
 });
 
-// Criar nova tag (apenas admin)
+// Criar tag
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem criar tags' });
-    }
-
     const { name } = req.body;
-    
-    if (!name) {
-      return res.status(400).json({ error: 'Nome da tag é obrigatório' });
-    }
-
-    const existingTag = await Tag.findOne({ where: { name } });
-    if (existingTag) {
-      return res.status(400).json({ error: 'Tag já existe' });
-    }
-
-    const tag = await Tag.create({ name });
+    const tag = await Tag.create({ name: name.toLowerCase() });
     res.status(201).json(tag);
   } catch (error) {
-    console.error('Erro ao criar tag:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'Esta tag já existe' });
+    }
     res.status(500).json({ error: 'Erro ao criar tag' });
   }
 });
 
-// Atualizar tag (apenas admin)
+// Atualizar tag
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem editar tags' });
-    }
-
+    const { name } = req.body;
     const tag = await Tag.findByPk(req.params.id);
+    
     if (!tag) {
       return res.status(404).json({ error: 'Tag não encontrada' });
     }
 
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: 'Nome da tag é obrigatório' });
-    }
-
-    const existingTag = await Tag.findOne({ where: { name } });
-    if (existingTag && existingTag.id !== tag.id) {
-      return res.status(400).json({ error: 'Já existe uma tag com este nome' });
-    }
-
-    await tag.update({ name });
+    await tag.update({ name: name.toLowerCase() });
     res.json(tag);
   } catch (error) {
-    console.error('Erro ao atualizar tag:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'Esta tag já existe' });
+    }
     res.status(500).json({ error: 'Erro ao atualizar tag' });
   }
 });
 
-// Deletar tag (apenas admin)
+// Deletar tag
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem deletar tags' });
-    }
-
     const tag = await Tag.findByPk(req.params.id);
+    
     if (!tag) {
       return res.status(404).json({ error: 'Tag não encontrada' });
     }
@@ -87,7 +75,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     await tag.destroy();
     res.status(204).send();
   } catch (error) {
-    console.error('Erro ao deletar tag:', error);
     res.status(500).json({ error: 'Erro ao deletar tag' });
   }
 });

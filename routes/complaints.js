@@ -226,12 +226,18 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     const complaint = await Complaint.create({
-      title,
-      description,
-      location,
-      status: 'Em Análise',
+      ...req.body,
       userId: req.user.id,
-      polygonCoordinates
+      status: 'Em Análise'
+    });
+
+    // Registrar a criação no histórico
+    await ComplaintLog.create({
+      complaintId: complaint.id,
+      changedById: req.user.id,
+      oldStatus: null, // null indica que é uma criação
+      newStatus: 'Em Análise',
+      type: 'created' // Novo campo para diferenciar criação de alteração
     });
 
     console.log('Denúncia criada com polígono:', complaint.polygonCoordinates);
@@ -239,13 +245,6 @@ router.post('/', authenticateToken, async (req, res) => {
     if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
       await complaint.setTags(tagIds);
     }
-
-    // Criar log inicial
-    await ComplaintLog.create({
-      ComplaintId: complaint.id,
-      newStatus: 'Em Análise',
-      changedById: req.user.id
-    });
 
     res.status(201).json(complaint);
   } catch (error) {

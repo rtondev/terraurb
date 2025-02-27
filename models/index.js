@@ -8,20 +8,16 @@ const { Report } = require('./report');
 const { Tag } = require('./tag');
 const { VerificationCode } = require('./verificationCode');
 
-// Definir o modelo de junção ComplaintTags
+// Definir o modelo de junção ComplaintTags corretamente
 const ComplaintTags = sequelize.define('ComplaintTags', {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
+  // Removemos o id auto_increment pois usaremos chave composta
   complaintId: {
     type: DataTypes.INTEGER,
     references: {
       model: 'Complaints',
       key: 'id'
     },
-    onDelete: 'CASCADE'
+    primaryKey: true
   },
   tagId: {
     type: DataTypes.INTEGER,
@@ -29,11 +25,17 @@ const ComplaintTags = sequelize.define('ComplaintTags', {
       model: 'Tags',
       key: 'id'
     },
-    onDelete: 'CASCADE'
+    primaryKey: true
   }
 }, {
   tableName: 'ComplaintTags',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['complaintId', 'tagId']
+    }
+  ]
 });
 
 // Definir associações
@@ -110,21 +112,15 @@ Report.belongsTo(Complaint, {
 
 // Associações Tag-Complaint (many-to-many)
 Complaint.belongsToMany(Tag, {
-  through: {
-    model: ComplaintTags,
-    unique: false
-  },
+  through: ComplaintTags,
   foreignKey: 'complaintId',
-  constraints: false
+  otherKey: 'tagId'
 });
 
 Tag.belongsToMany(Complaint, {
-  through: {
-    model: ComplaintTags,
-    unique: false
-  },
+  through: ComplaintTags,
   foreignKey: 'tagId',
-  constraints: false
+  otherKey: 'complaintId'
 });
 
 // Função para sincronizar o banco de dados

@@ -7,19 +7,20 @@ const { authenticateToken } = require('../middleware/auth');
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { complaintId, content } = req.body;
-    
+    const userId = req.user.id;
+
     const comment = await Comment.create({
       complaintId,
-      userId: req.user.id,
+      userId,
       content
     });
 
-    // Carregar o comentário com os dados do usuário
+    // Retornar o comentário com os dados do usuário
     const commentWithUser = await Comment.findByPk(comment.id, {
       include: [{
         model: User,
-        as: 'author',
-        attributes: ['id', 'nickname']
+        attributes: ['id', 'nickname', 'avatarUrl'],
+        as: 'user'
       }]
     });
 
@@ -31,22 +32,22 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Listar comentários de uma denúncia
-router.get('/complaint/:complaintId', authenticateToken, async (req, res) => {
+router.get('/complaint/:complaintId', async (req, res) => {
   try {
     const comments = await Comment.findAll({
       where: { complaintId: req.params.complaintId },
       include: [{
         model: User,
-        as: 'author',
-        attributes: ['id', 'nickname']
+        attributes: ['id', 'nickname', 'avatarUrl'],
+        as: 'user'
       }],
       order: [['createdAt', 'DESC']]
     });
     
     res.json(comments);
   } catch (error) {
-    console.error('Erro ao listar comentários:', error);
-    res.status(500).json({ error: 'Erro ao listar comentários' });
+    console.error('Erro ao buscar comentários:', error);
+    res.status(500).json({ error: 'Erro ao buscar comentários' });
   }
 });
 

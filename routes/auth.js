@@ -11,6 +11,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const streamifier = require('streamifier');
 const { authenticateToken } = require('../middleware/auth');
 const { Op } = require('sequelize');
+const deviceInfoMiddleware = require('../middleware/deviceInfo');
 
 // Configurar o transporter do Nodemailer para Gmail
 const transporter = nodemailer.createTransport({
@@ -21,12 +22,14 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Testar conexão ao iniciar
+// Comentar ou remover esta verificação
+/*
 transporter.verify(function(error, success) {
   if (error) {
     console.error('Erro na configuração do email:', error);
   }
 });
+*/
 
 // Armazenamento temporário dos códigos e dados de registro
 const verificationCodes = new Map();
@@ -198,6 +201,9 @@ const generateDeviceId = (deviceInfo) => {
   return `${browser}-${os}-${platform}-${ip}`.replace(/\s+/g, '-').toLowerCase();
 };
 
+// Aplicar middleware
+router.use(deviceInfoMiddleware);
+
 // Login route
 router.post('/login', async (req, res) => {
   try {
@@ -221,50 +227,13 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET
     );
 
-    // Informações do dispositivo
-    const deviceInfo = {
-      userAgent: req.headers['user-agent'],
-      platform: req.headers['sec-ch-ua-platform'] || 'Desconhecido',
-      mobile: req.headers['sec-ch-ua-mobile'] === '?1' ? 'Sim' : 'Não',
-      browser: getBrowserInfo(req.headers['user-agent']),
-      os: getOperatingSystem(req.headers['user-agent']),
-      ip: req.ip,
-      location: {
-        city: 'Desconhecido',
-        state: 'Desconhecido',
-        country: 'Desconhecido',
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      }
-    };
-
-    // Gerar deviceId
-    const deviceId = generateDeviceId(deviceInfo);
-
-    // Buscar sessão existente do dispositivo
-    let session = await Session.findOne({
-      where: { 
-        userId: user.id,
-        deviceId,
-        isActive: true
-      }
+    // Criar sessão com informações do dispositivo
+    const session = await Session.create({
+      userId: user.id,
+      token,
+      deviceInfo: req.deviceInfo,
+      lastActivity: new Date()
     });
-
-    if (session) {
-      // Atualizar sessão existente
-      await session.update({
-        token,
-        lastUsed: new Date(),
-        accessCount: session.accessCount + 1
-      });
-    } else {
-      // Criar nova sessão
-      session = await Session.create({
-        token,
-        deviceInfo,
-        deviceId,
-        userId: user.id
-      });
-    }
 
     const { password: _, ...userWithoutPassword } = user.toJSON();
     res.json({ token, user: userWithoutPassword });
@@ -312,13 +281,20 @@ function getOperatingSystem(userAgent) {
   return 'Sistema operacional desconhecido';
 }
 
-// Me route
+// Rota para obter dados do usuário atual
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    console.log('Usuário autenticado:', req.user.id);
-    res.json(req.user);
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    res.json(user);
   } catch (error) {
-    console.error('Erro na rota /me:', error);
+    console.error('Erro ao buscar usuário:', error);
     res.status(500).json({ error: 'Erro ao buscar dados do usuário' });
   }
 });
@@ -441,34 +417,23 @@ router.get('/check-session', authenticateToken, async (req, res) => {
 router.get('/devices', authenticateToken, async (req, res) => {
   try {
     const sessions = await Session.findAll({
-      where: { 
-        userId: req.user.id,
-        isActive: true
-      },
-      order: [['lastUsed', 'DESC']]
+      where: { userId: req.user.id },
+      order: [['lastActivity', 'DESC']]
     });
 
-    // Agrupar por deviceId
-    const uniqueDevices = sessions.reduce((acc, session) => {
-      if (!acc[session.deviceId] || 
-          new Date(session.lastUsed) > new Date(acc[session.deviceId].lastUsed)) {
-        acc[session.deviceId] = session;
-      }
-      return acc;
-    }, {});
-
-    const formattedSessions = Object.values(uniqueDevices).map(session => ({
+    const devices = sessions.map(session => ({
       id: session.id,
-      deviceId: session.deviceId,
-      deviceInfo: session.deviceInfo,
-      lastUsed: session.lastUsed,
-      accessCount: session.accessCount
+      browser: session.deviceInfo.browser,
+      os: session.deviceInfo.os,
+      device: session.deviceInfo.device,
+      location: session.deviceInfo.location,
+      lastActivity: session.lastActivity,
+      current: session.token === req.token
     }));
 
-    res.json(formattedSessions);
+    res.json(devices);
   } catch (error) {
-    console.error('Erro ao buscar dispositivos:', error);
-    res.status(500).json({ error: 'Erro ao buscar dispositivos' });
+    res.status(500).json({ error: 'Erro ao listar dispositivos' });
   }
 });
 

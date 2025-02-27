@@ -5,7 +5,11 @@ const { Comment } = require('./comment');
 
 const Report = sequelize.define('Report', {
   type: {
-    type: DataTypes.ENUM('complaint', 'comment'),
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  targetId: {
+    type: DataTypes.INTEGER,
     allowNull: false
   },
   reason: {
@@ -13,38 +17,34 @@ const Report = sequelize.define('Report', {
     allowNull: false
   },
   status: {
-    type: DataTypes.ENUM('pending', 'inappropriate', 'dismissed'),
-    allowNull: false,
-    defaultValue: 'pending'
+    type: DataTypes.STRING,
+    defaultValue: 'Pendente'
   },
-  targetId: {
-    type: DataTypes.INTEGER,
-    allowNull: false
+  adminNote: {
+    type: DataTypes.TEXT
   },
-  reporterId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: User,
-      key: 'id'
-    }
+  resolvedAt: {
+    type: DataTypes.DATE
   },
-  reviewedBy: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: User,
-      key: 'id'
-    }
-  },
-  reviewNote: {
-    type: DataTypes.TEXT,
-    allowNull: true
+  resolvedBy: {
+    type: DataTypes.INTEGER
   }
 });
 
 // Associations
-Report.belongsTo(User, { as: 'reporter', foreignKey: 'reporterId' });
-Report.belongsTo(User, { as: 'reviewer', foreignKey: 'reviewedBy' });
+Report.belongsTo(User, { as: 'reporter', foreignKey: 'userId' });
+Report.belongsTo(User, { as: 'resolver', foreignKey: 'resolvedBy' });
+
+// Associações polimórficas
+Report.belongsTo(Complaint, {
+  foreignKey: 'targetId',
+  constraints: false,
+  as: 'complaintTarget'
+});
+Report.belongsTo(Comment, {
+  foreignKey: 'targetId',
+  constraints: false,
+  as: 'commentTarget'
+});
 
 module.exports = { Report };

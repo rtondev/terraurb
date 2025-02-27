@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Report, User, Complaint } = require('../models');
+const { Report, User, Complaint, Comment } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 
 // Listar todos os reports (admin only)
@@ -18,14 +18,58 @@ router.get('/', authenticateToken, async (req, res) => {
           attributes: ['id', 'nickname']
         },
         {
+          model: User,
+          as: 'resolver',
+          attributes: ['id', 'nickname']
+        },
+        {
           model: Complaint,
-          attributes: ['id', 'title']
+          as: 'complaintTarget',
+          attributes: ['id', 'title'],
+          required: false
+        },
+        {
+          model: Comment,
+          as: 'commentTarget',
+          attributes: ['id', 'content'],
+          required: false,
+          include: [{
+            model: User,
+            attributes: ['id', 'nickname']
+          }]
         }
       ],
       order: [['createdAt', 'DESC']]
     });
 
-    res.json(reports);
+    // Formatar os dados para a resposta
+    const formattedReports = reports.map(report => {
+      const reportData = report.toJSON();
+      
+      // Adicionar informações do alvo baseado no tipo
+      if (report.type === 'complaint' && report.complaintTarget) {
+        reportData.target = {
+          id: report.complaintTarget.id,
+          title: report.complaintTarget.title,
+          type: 'Denúncia'
+        };
+      } else if (report.type === 'comment' && report.commentTarget) {
+        reportData.target = {
+          id: report.commentTarget.id,
+          content: report.commentTarget.content,
+          author: report.commentTarget.User?.nickname,
+          type: 'Comentário'
+        };
+      }
+
+      // Limpar as associações brutas
+      delete reportData.complaintTarget;
+      delete reportData.commentTarget;
+
+      return reportData;
+    });
+
+    res.json(formattedReports);
   } catch (error) {
     console.error('Erro ao listar reports:', error);
     res.status(500).json({ error: 'Erro ao listar reports' });
@@ -35,56 +79,51 @@ router.get('/', authenticateToken, async (req, res) => {
 // Criar novo report
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { complaintId, reason, description } = req.body;
+    const { type, targetId, reason } = req.body;
+    const userId = req.user.id;
 
-    if (!complaintId || !reason) {
-      return res.status(400).json({ error: 'ComplaintId e reason são obrigatórios' });
+    // Validar tipo
+    if (!['complaint', 'comment'].includes(type)) {
+      return res.status(400).json({ error: 'Tipo de denúncia inválido' });
     }
 
-    // Verificar se a denúncia existe
-    const complaint = await Complaint.findByPk(complaintId);
-    if (!complaint) {
-      return res.status(404).json({ error: 'Denúncia não encontrada' });
+    // Verificar se o alvo existe
+    let target;
+    if (type === 'complaint') {
+      target = await Complaint.findByPk(targetId);
+    } else {
+      target = await Comment.findByPk(targetId);
     }
 
-    // Verificar se o usuário já reportou esta denúncia
+    if (!target) {
+      return res.status(404).json({ error: 'Conteúdo não encontrado' });
+    }
+
+    // Verificar se já existe uma denúncia deste usuário para este alvo
     const existingReport = await Report.findOne({
       where: {
-        complaintId,
-        userId: req.user.id
+        type,
+        targetId,
+        userId
       }
     });
 
     if (existingReport) {
-      return res.status(400).json({ error: 'Você já reportou esta denúncia' });
+      return res.status(400).json({ error: 'Você já denunciou este conteúdo' });
     }
 
     const report = await Report.create({
-      complaintId,
-      userId: req.user.id,
+      type,
+      targetId,
       reason,
-      description,
-      status: 'pending'
+      userId,
+      status: 'Pendente'
     });
 
-    const reportWithDetails = await Report.findByPk(report.id, {
-      include: [
-        {
-          model: User,
-          as: 'reporter',
-          attributes: ['id', 'nickname']
-        },
-        {
-          model: Complaint,
-          attributes: ['id', 'title']
-        }
-      ]
-    });
-
-    res.status(201).json(reportWithDetails);
+    res.status(201).json(report);
   } catch (error) {
-    console.error('Erro ao criar report:', error);
-    res.status(500).json({ error: 'Erro ao criar report' });
+    console.error('Erro ao criar denúncia:', error);
+    res.status(500).json({ error: 'Erro ao criar denúncia' });
   }
 });
 

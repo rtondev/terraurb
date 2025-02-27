@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { User } = require('../models');
+const { User, ActivityLog } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 
 // Middleware para verificar se o usuário é admin
@@ -48,6 +48,25 @@ router.delete('/users/:id', async (req, res) => {
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Error deleting user' });
+  }
+});
+
+// Dentro da rota de logs
+router.get('/activity-logs', async (req, res) => {
+  try {
+    const logs = await ActivityLog.findAll({
+      include: [{
+        model: User,
+        attributes: ['id', 'nickname', 'avatarUrl'],
+        as: 'user'
+      }],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(logs);
+  } catch (error) {
+    console.error('Erro ao buscar logs:', error);
+    res.status(500).json({ error: 'Erro ao buscar logs de atividade' });
   }
 });
 
